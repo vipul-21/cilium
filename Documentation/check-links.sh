@@ -31,7 +31,7 @@ build_with_linkchecker() {
     rm -rf "${linksdir}"
     
     sphinx-build -b linkcheck -d "${build_dir}/doctrees" . "${linksdir}" \
-        --color -E -q -w "${warnings}" -W --keep-going 2>/dev/null
+        --color -E -w "${warnings}" -W --keep-going 2>/dev/null
 }
 
 echo "Checking links..."
