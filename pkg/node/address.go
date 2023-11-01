@@ -196,7 +196,8 @@ func InitNodePortAddrs(devices []string, inheritIPAddrFromDevice string) error {
 			} else {
 				ip, err := firstGlobalV6Addr(device, addrs.k8sNodeIP, !preferPublicIP)
 				if err != nil {
-					return fmt.Errorf("Failed to determine IPv6 of %s for NodePort", device)
+					log.WithError(err).Warning("Failed to determine IPv6 of device for NodePort")
+					continue
 				}
 				addrs.ipv6NodePortAddrs[device] = ip
 			}
@@ -468,9 +469,7 @@ func RestoreHostIPs(ipv6 bool, fromK8s, fromFS net.IP, cidrs []*cidr.CIDR) net.I
 		return nil
 	}
 
-	var (
-		setter func(net.IP)
-	)
+	var setter func(net.IP)
 	if ipv6 {
 		setter = SetIPv6Router
 	} else {

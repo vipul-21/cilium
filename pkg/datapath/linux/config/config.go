@@ -389,13 +389,11 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 			cDefinesMap["ENABLE_SRC_RANGE_CHECK"] = "1"
 			if option.Config.EnableIPv4 {
 				cDefinesMap["LB4_SRC_RANGE_MAP"] = lbmap.SourceRange4MapName
-				cDefinesMap["LB4_SRC_RANGE_MAP_SIZE"] =
-					fmt.Sprintf("%d", lbmap.SourceRange4Map.MapInfo.MaxEntries)
+				cDefinesMap["LB4_SRC_RANGE_MAP_SIZE"] = fmt.Sprintf("%d", lbmap.SourceRange4Map.MapInfo.MaxEntries)
 			}
 			if option.Config.EnableIPv6 {
 				cDefinesMap["LB6_SRC_RANGE_MAP"] = lbmap.SourceRange6MapName
-				cDefinesMap["LB6_SRC_RANGE_MAP_SIZE"] =
-					fmt.Sprintf("%d", lbmap.SourceRange6Map.MapInfo.MaxEntries)
+				cDefinesMap["LB6_SRC_RANGE_MAP_SIZE"] = fmt.Sprintf("%d", lbmap.SourceRange6Map.MapInfo.MaxEntries)
 			}
 		}
 
@@ -457,11 +455,13 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 			if !ok {
 				log.WithFields(logrus.Fields{
 					"directRoutingIface": directRoutingIface,
-				}).Fatal("NodePort enabled but direct routing device's IPv6 address not found")
+				}).Warning("NodePort enabled but direct routing device's IPv6 address not found")
+				extraMacrosMap["IPV6_DIRECT_ROUTING"] = ""
+			} else {
+				extraMacrosMap["IPV6_DIRECT_ROUTING"] = directRoutingIPv6.String()
 			}
-
-			extraMacrosMap["IPV6_DIRECT_ROUTING"] = directRoutingIPv6.String()
 			fw.WriteString(FmtDefineAddress("IPV6_DIRECT_ROUTING", directRoutingIPv6))
+
 		}
 	} else {
 		var directRoutingIPv6 net.IP
@@ -514,8 +514,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		if option.Config.EnableIPv4Masquerade && option.Config.EnableBPFMasquerade {
 			cDefinesMap["ENABLE_MASQUERADE"] = "1"
 			cidr := datapath.RemoteSNATDstAddrExclusionCIDRv4()
-			cDefinesMap["IPV4_SNAT_EXCLUSION_DST_CIDR"] =
-				fmt.Sprintf("%#x", byteorder.NetIPv4ToHost32(cidr.IP))
+			cDefinesMap["IPV4_SNAT_EXCLUSION_DST_CIDR"] = fmt.Sprintf("%#x", byteorder.NetIPv4ToHost32(cidr.IP))
 			ones, _ := cidr.Mask.Size()
 			cDefinesMap["IPV4_SNAT_EXCLUSION_DST_CIDR_LEN"] = fmt.Sprintf("%d", ones)
 
