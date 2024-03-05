@@ -31,5 +31,9 @@ func (a *apiRateLimitingMetrics) ProcessedRequest(name string, v rate.MetricsVal
 		v.Outcome = metrics.Error2Outcome(v.Error)
 	}
 
-	metrics.APILimiterProcessedRequests.WithLabelValues(name, v.Outcome).Inc()
+	if v.ReturnCode == "" {
+		v.ReturnCode = metrics.LabelOutcome2Code(v.Outcome)
+	}
+
+	metrics.APILimiterProcessedRequests.WithLabelValues(name, v.Outcome, v.ReturnCode).Inc()
 }

@@ -39,6 +39,11 @@ func Error(code int, err error) *APIError {
 	return New(code, err.Error())
 }
 
+// GetCode returns the API error code.
+func (a *APIError) GetCode() int {
+	return a.code
+}
+
 // Error returns the API error message.
 func (a *APIError) Error() string {
 	return a.msg

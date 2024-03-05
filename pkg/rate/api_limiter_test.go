@@ -56,6 +56,7 @@ func (m *mockMetrics) ProcessedRequest(name string, v MetricsValues) {
 	me.Burst = v.Burst
 	me.CurrentRequestsInFlight = v.CurrentRequestsInFlight
 	me.AdjustmentFactor = v.AdjustmentFactor
+	me.ReturnCode = v.ReturnCode
 }
 
 func (b *ControllerSuite) TestNewAPILimiter(c *check.C) {
@@ -495,7 +496,7 @@ func (b *ControllerSuite) TestAPILimiterMetrics(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(req2, check.Not(check.IsNil))
 	time.Sleep(5 * time.Millisecond)
-	req3.Error(fmt.Errorf("error"))
+	req3.Error(fmt.Errorf("error"), "500")
 	req3.Done()
 
 	a := l.Limiter("foo")
@@ -510,6 +511,7 @@ func (b *ControllerSuite) TestAPILimiterMetrics(c *check.C) {
 	c.Assert(metrics.metrics["foo"].MeanProcessingDuration, check.Equals, a.meanProcessingDuration)
 	c.Assert(metrics.metrics["foo"].MeanWaitDuration, check.Equals, a.meanWaitDuration)
 	c.Assert(metrics.metrics["foo"].AdjustmentFactor, check.Equals, a.adjustmentFactor)
+	c.Assert(metrics.metrics["foo"].ReturnCode, check.Equals, "500")
 }
 
 func (b *ControllerSuite) TestAPILimiterMergeUserConfig(c *check.C) {
