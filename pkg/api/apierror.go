@@ -44,6 +44,11 @@ func (a *APIError) Error() string {
 	return a.msg
 }
 
+// GetCode returns the code for the API Error.
+func (a *APIError) GetCode() int {
+	return a.code
+}
+
 // GetModel returns model error.
 func (a *APIError) GetModel() *models.Error {
 	m := models.Error(a.msg)

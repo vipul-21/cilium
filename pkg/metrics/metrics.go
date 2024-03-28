@@ -1402,7 +1402,7 @@ func CreateConfiguration(metricsEnabled []string) (Configuration, []prometheus.C
 				Subsystem: SubsystemAPILimiter,
 				Name:      "processed_requests_total",
 				Help:      "Total number of API requests processed",
-			}, []string{"api_call", LabelOutcome})
+			}, []string{"api_call", LabelOutcome, LabelAPIReturnCode})
 
 			collectors = append(collectors, APILimiterProcessedRequests)
 			c.APILimiterProcessedRequests = true
@@ -1656,6 +1656,14 @@ func DumpMetrics() ([]*models.Metric, error) {
 		}
 	}
 	return result, nil
+}
+
+// LabelOutcome2Code converts a label outcome to a code
+func LabelOutcome2Code(outcome string) int {
+	if outcome == LabelValueOutcomeSuccess {
+		return 200
+	}
+	return 500
 }
 
 // Error2Outcome converts an error to LabelOutcome

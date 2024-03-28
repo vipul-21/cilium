@@ -82,6 +82,8 @@ const (
 	outcomeParallelMaxWait outcome = "fail-parallel-wait"
 	outcomeLimitMaxWait    outcome = "fail-limit-wait"
 	outcomeReqCancelled    outcome = "request-cancelled"
+	outcomeErrorCode       int     = 429
+	outcomeSuccessCode     int     = 200
 )
 
 // APILimiter is an extension to x/time/rate.Limiter specifically for Cilium
@@ -432,7 +434,7 @@ func (l *APILimiter) adjustedParallelRequests() int {
 	return int(l.adjustmentLimit(newParallelRequests, float64(l.params.ParallelRequests)))
 }
 
-func (l *APILimiter) requestFinished(r *limitedRequest, err error) {
+func (l *APILimiter) requestFinished(r *limitedRequest, err error, code int) {
 	if r.finished {
 		return
 	}
@@ -514,6 +516,7 @@ func (l *APILimiter) requestFinished(r *limitedRequest, err error) {
 		AdjustmentFactor:            l.adjustmentFactor,
 		Error:                       err,
 		Outcome:                     string(r.outcome),
+		ReturnCode:                  code,
 	}
 
 	if l.limiter != nil {
@@ -543,7 +546,7 @@ func calcMeanDuration(durations []time.Duration) float64 {
 // WaitDuration() concurrently.
 type LimitedRequest interface {
 	Done()
-	Error(err error)
+	Error(err error, code int)
 	WaitDuration() time.Duration
 }
 
@@ -565,12 +568,12 @@ func (l *limitedRequest) WaitDuration() time.Duration {
 
 // Done must be called when the API request has been successfully processed
 func (l *limitedRequest) Done() {
-	l.limiter.requestFinished(l, nil)
+	l.limiter.requestFinished(l, nil, outcomeSuccessCode)
 }
 
 // Error must be called when the API request resulted in an error
-func (l *limitedRequest) Error(err error) {
-	l.limiter.requestFinished(l, err)
+func (l *limitedRequest) Error(err error, code int) {
+	l.limiter.requestFinished(l, err, code)
 }
 
 // Wait blocks until the next API call is allowed to be processed. If the
@@ -580,7 +583,7 @@ func (l *limitedRequest) Error(err error) {
 func (l *APILimiter) Wait(ctx context.Context) (LimitedRequest, error) {
 	req, err := l.wait(ctx)
 	if err != nil {
-		l.requestFinished(req, err)
+		l.requestFinished(req, err, outcomeErrorCode)
 		return nil, err
 	}
 	return req, nil
@@ -809,6 +812,7 @@ type MetricsValues struct {
 	CurrentRequestsInFlight     int
 	AdjustmentFactor            float64
 	Error                       error
+	ReturnCode                  int
 }
 
 // MetricsObserver is the interface that must be implemented to extract metrics
@@ -863,7 +867,7 @@ type dummyRequest struct{}
 
 func (d dummyRequest) WaitDuration() time.Duration { return 0 }
 func (d dummyRequest) Done()                       {}
-func (d dummyRequest) Error(err error)             {}
+func (d dummyRequest) Error(err error, code int)             {}
 
 // Wait invokes Wait() on the APILimiter with the given name. If the limiter
 // does not exist, a dummy limiter is used which will not impose any

@@ -60,7 +60,7 @@ func (h *getEndpoint) Handle(params GetEndpointParams) middleware.Responder {
 	resEPs := h.d.getEndpointList(params)
 
 	if params.Labels != nil && len(resEPs) == 0 {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, GetEndpointNotFoundCode)
 		return NewGetEndpointNotFound()
 	}
 
@@ -148,10 +148,10 @@ func (h *getEndpointID) Handle(params GetEndpointIDParams) middleware.Responder 
 	ep, err := h.d.endpointManager.Lookup(params.ID)
 
 	if err != nil {
-		r.Error(err)
+		r.Error(err, GetEndpointIDInvalidCode)
 		return api.Error(GetEndpointIDInvalidCode, err)
 	} else if ep == nil {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, GetEndpointIDNotFoundCode)
 		return NewGetEndpointIDNotFound()
 	} else {
 		return NewGetEndpointIDOK().WithPayload(ep.GetModel())
@@ -542,7 +542,7 @@ func (h *putEndpointID) Handle(params PutEndpointIDParams) (resp middleware.Resp
 
 	ep, code, err := h.d.createEndpoint(params.HTTPRequest.Context(), h.d, epTemplate)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, code)
 		return api.Error(code, err)
 	}
 
@@ -601,7 +601,7 @@ func (h *patchEndpointID) Handle(params PatchEndpointIDParams) middleware.Respon
 	// Note: newEp's labels are ignored.
 	newEp, err2 := endpoint.NewEndpointFromChangeModel(h.d.ctx, h.d, h.d, h.d.ipcache, h.d.l7Proxy, h.d.identityAllocator, epTemplate)
 	if err2 != nil {
-		r.Error(err2)
+		r.Error(err2, PutEndpointIDInvalidCode)
 		return api.Error(PutEndpointIDInvalidCode, err2)
 	}
 
@@ -617,15 +617,15 @@ func (h *patchEndpointID) Handle(params PatchEndpointIDParams) middleware.Respon
 
 	ep, err := h.d.endpointManager.Lookup(params.ID)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, GetEndpointIDInvalidCode)
 		return api.Error(GetEndpointIDInvalidCode, err)
 	}
 	if ep == nil {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, PatchEndpointIDNotFoundCode)
 		return NewPatchEndpointIDNotFound()
 	}
 	if err = endpoint.APICanModify(ep); err != nil {
-		r.Error(err)
+		r.Error(err, PatchEndpointIDInvalidCode)
 		return api.Error(PatchEndpointIDInvalidCode, err)
 	}
 
@@ -637,7 +637,7 @@ func (h *patchEndpointID) Handle(params PatchEndpointIDParams) middleware.Respon
 	//  Support arbitrary changes? Support only if unset?
 	reason, err := ep.ProcessChangeRequest(newEp, validStateTransition)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, PatchEndpointIDNotFoundCode)
 		return NewPatchEndpointIDNotFound()
 	}
 
@@ -650,7 +650,7 @@ func (h *patchEndpointID) Handle(params PatchEndpointIDParams) middleware.Respon
 			err := api.Error(PatchEndpointIDFailedCode,
 				fmt.Errorf("error while regenerating endpoint."+
 					" For more info run: 'cilium endpoint get %d'", ep.ID))
-			r.Error(err)
+			r.Error(err, PatchEndpointIDFailedCode)
 			return err
 		}
 		// FIXME: Special return code to indicate regeneration happened?
@@ -769,10 +769,11 @@ func (h *deleteEndpointID) Handle(params DeleteEndpointIDParams) middleware.Resp
 
 	d := h.daemon
 	if nerr, err := d.DeleteEndpoint(params.ID); err != nil {
-		r.Error(err)
 		if apierr, ok := err.(*api.APIError); ok {
+			r.Error(err, apierr.GetCode())
 			return apierr
 		}
+		r.Error(err, DeleteEndpointIDErrorsCode)
 		return api.Error(DeleteEndpointIDErrorsCode, err)
 	} else if nerr > 0 {
 		return NewDeleteEndpointIDErrors().WithPayload(int64(nerr))
@@ -826,10 +827,11 @@ func (h *patchEndpointIDConfig) Handle(params PatchEndpointIDConfigParams) middl
 
 	d := h.daemon
 	if err := d.EndpointUpdate(params.ID, params.EndpointConfiguration); err != nil {
-		r.Error(err)
 		if apierr, ok := err.(*api.APIError); ok {
+			r.Error(err, apierr.GetCode())
 			return apierr
 		}
+		r.Error(err, PatchEndpointIDFailedCode)
 		return api.Error(PatchEndpointIDFailedCode, err)
 	}
 
@@ -855,10 +857,10 @@ func (h *getEndpointIDConfig) Handle(params GetEndpointIDConfigParams) middlewar
 
 	ep, err := h.daemon.endpointManager.Lookup(params.ID)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, GetEndpointIDInvalidCode)
 		return api.Error(GetEndpointIDInvalidCode, err)
 	} else if ep == nil {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, GetEndpointIDConfigNotFoundCode)
 		return NewGetEndpointIDConfigNotFound()
 	} else {
 		cfgStatus := ep.GetConfigurationStatus()
@@ -886,17 +888,17 @@ func (h *getEndpointIDLabels) Handle(params GetEndpointIDLabelsParams) middlewar
 
 	ep, err := h.daemon.endpointManager.Lookup(params.ID)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, GetEndpointIDInvalidCode)
 		return api.Error(GetEndpointIDInvalidCode, err)
 	}
 	if ep == nil {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, GetEndpointIDLabelsNotFoundCode)
 		return NewGetEndpointIDLabelsNotFound()
 	}
 
 	cfg, err := ep.GetLabelsModel()
 	if err != nil {
-		r.Error(err)
+		r.Error(err, GetEndpointIDInvalidCode)
 		return api.Error(GetEndpointIDInvalidCode, err)
 	}
 
@@ -923,10 +925,10 @@ func (h *getEndpointIDLog) Handle(params GetEndpointIDLogParams) middleware.Resp
 	ep, err := h.d.endpointManager.Lookup(params.ID)
 
 	if err != nil {
-		r.Error(err)
+		r.Error(err, GetEndpointIDNotFoundCode)
 		return api.Error(GetEndpointIDLogInvalidCode, err)
 	} else if ep == nil {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, GetEndpointIDLogNotFoundCode)
 		return NewGetEndpointIDLogNotFound()
 	} else {
 		return NewGetEndpointIDLogOK().WithPayload(ep.GetStatusModel())
@@ -953,10 +955,10 @@ func (h *getEndpointIDHealthz) Handle(params GetEndpointIDHealthzParams) middlew
 	ep, err := h.d.endpointManager.Lookup(params.ID)
 
 	if err != nil {
-		r.Error(err)
+		r.Error(err, GetEndpointIDHealthzInvalidCode)
 		return api.Error(GetEndpointIDHealthzInvalidCode, err)
 	} else if ep == nil {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, GetEndpointIDHealthzNotFoundCode)
 		return NewGetEndpointIDHealthzNotFound()
 	} else {
 		return NewGetEndpointIDHealthzOK().WithPayload(ep.GetHealthModel())
@@ -1020,22 +1022,22 @@ func (h *putEndpointIDLabels) Handle(params PatchEndpointIDLabelsParams) middlew
 
 	ep, err := d.endpointManager.Lookup(params.ID)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, PutEndpointIDInvalidCode)
 		return api.Error(PutEndpointIDInvalidCode, err)
 	} else if ep == nil {
-		r.Error(errEndpointNotFound)
+		r.Error(errEndpointNotFound, PatchEndpointIDLabelsNotFoundCode)
 		return NewPatchEndpointIDLabelsNotFound()
 	}
 
 	add, del, err := ep.ApplyUserLabelChanges(lbls)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, PutEndpointIDInvalidCode)
 		return api.Error(PutEndpointIDInvalidCode, err)
 	}
 
 	code, err := d.modifyEndpointIdentityLabelsFromAPI(params.ID, add, del)
 	if err != nil {
-		r.Error(err)
+		r.Error(err, code)
 		return api.Error(code, err)
 	}
 	return NewPatchEndpointIDLabelsOK()
