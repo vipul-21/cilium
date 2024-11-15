@@ -21,6 +21,7 @@ import (
 	"github.com/cilium/cilium/pkg/completion"
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
 	"github.com/cilium/cilium/pkg/defaults"
+	identityPkg "github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -697,6 +698,17 @@ func (p *Proxy) CreateOrUpdateRedirect(
 	revertStack.Push(newRedirectRevertFunc)
 
 	return port, nil, finalizeList.Finalize, revertStack.Revert
+}
+
+func (p *Proxy) UpdateSDP(rules map[identityPkg.NumericIdentity]*policy.CachedSelectorPolicy) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	if GlobalStandaloneDNSProxy == nil {
+		return 
+	}
+
+	GlobalStandaloneDNSProxy.UpdatePolicyRulesLocked(rules)
 }
 
 func (p *Proxy) createNewRedirect(

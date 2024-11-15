@@ -116,6 +116,11 @@ func (r *RedirectSuiteProxy) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, po
 // RemoveNetworkPolicy does nothing.
 func (r *RedirectSuiteProxy) RemoveNetworkPolicy(ep endpoint.EndpointInfoSource) {}
 
+// RemoveNetworkPolicy does nothing.
+func (r *RedirectSuiteProxy) UpdateSDP(rules map[identity.NumericIdentity]*policy.CachedSelectorPolicy) {
+	return
+}
+
 // DummyIdentityAllocatorOwner implements
 // pkg/identity/cache/IdentityAllocatorOwner. It is used for unit testing.
 type DummyIdentityAllocatorOwner struct{}

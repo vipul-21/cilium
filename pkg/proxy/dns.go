@@ -9,6 +9,7 @@ import (
 	"github.com/cilium/cilium/pkg/completion"
 	"github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
+	identityPkg "github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/revert"
@@ -16,7 +17,8 @@ import (
 
 var (
 	// DefaultDNSProxy is the global, shared, DNS Proxy singleton.
-	DefaultDNSProxy proxy.DNSProxier
+	DefaultDNSProxy          proxy.DNSProxier
+	GlobalStandaloneDNSProxy sdpPolicyUpdater
 )
 
 // dnsRedirect implements the Redirect interface for an l7 proxy
@@ -34,6 +36,10 @@ type proxyRuleUpdater interface {
 	// UpdateAllowed updates the rules in the DNS proxy with newRules for the
 	// endpointID and destPort.
 	UpdateAllowed(endpointID uint64, destPort restore.PortProto, newRules policy.L7DataMap) error
+}
+
+type sdpPolicyUpdater interface {
+	UpdatePolicyRulesLocked(map[identityPkg.NumericIdentity]*policy.CachedSelectorPolicy) error
 }
 
 // setRules replaces old l7 rules of a redirect with new ones.

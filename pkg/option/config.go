@@ -427,6 +427,9 @@ const (
 	// ToFQDNsProxyPort is the global port on which the in-agent DNS proxy should listen. Default 0 is a OS-assigned port.
 	ToFQDNsProxyPort = "tofqdns-proxy-port"
 
+	// ToFQDNsServerAddr is the port on which the standalone grpc server should listen.
+	ToFqdnsServerPort = "tofqdns-server-port"
+
 	// ToFQDNsMaxIPsPerHost defines the maximum number of IPs to maintain
 	// for each FQDN name in an endpoint's FQDN cache
 	ToFQDNsMaxIPsPerHost = "tofqdns-endpoint-max-ip-per-hostname"
@@ -1666,6 +1669,9 @@ type DaemonConfig struct {
 	// DNSPolicyUnloadOnShutdown defines whether DNS policy rules should be unloaded on
 	// graceful shutdown.
 	DNSPolicyUnloadOnShutdown bool
+
+	// ToFqdnsServerPort is the user-configured global, Standalone dns proxy grpc server port
+	ToFqdnsServerPort int
 
 	// ToFQDNsProxyPort is the user-configured global, shared, DNS listen port used
 	// by the DNS Proxy. Both UDP and TCP are handled on the same port. When it
@@ -3086,6 +3092,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 		c.ToFQDNsMinTTL = defaults.ToFQDNsMinTTL
 	}
 	c.ToFQDNsProxyPort = vp.GetInt(ToFQDNsProxyPort)
+	c.ToFqdnsServerPort = vp.GetInt(ToFqdnsServerPort)
 	c.ToFQDNsPreCache = vp.GetString(ToFQDNsPreCache)
 	c.ToFQDNsEnableDNSCompression = vp.GetBool(ToFQDNsEnableDNSCompression)
 	c.ToFQDNsIdleConnectionGracePeriod = vp.GetDuration(ToFQDNsIdleConnectionGracePeriod)

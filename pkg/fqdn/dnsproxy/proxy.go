@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	dnsProxyApi "github.com/cilium/cilium/api/v1/dnsproxy"
 	"github.com/cilium/dns"
 	"github.com/sirupsen/logrus"
 	"go4.org/netipx"
@@ -135,6 +136,9 @@ type DNSProxy struct {
 	// Note: Simple DNS names, e.g. bar.foo.com, will treat the "." as a literal.
 	allowed perEPAllow
 
+	// Allowed tracked the identities that are allowed to make DNS queries.
+	allowedV2 PerIdentityAllow
+
 	// restored is a set of rules restored from a previous instance that can be
 	// used until 'allowed' rules for an endpoint are first initialized after
 	// a restart
@@ -157,6 +161,9 @@ type DNSProxy struct {
 
 	// UnbindAddress unbinds dns servers from socket in order to stop serving DNS traffic before proxy shutdown
 	unbindAddress func()
+
+	// dnsProxyType is the type of DNS proxy - either in built DNS proxy or standalone DNS proxy
+	dnsProxyType DNSProxyType
 }
 
 // regexCacheEntry is a lookup entry used to cache a compiled regex
@@ -172,6 +179,15 @@ type regexCache map[string]*regexCacheEntry
 
 // perEPAllow maps EndpointIDs to protocols + ports + selectors + rules
 type perEPAllow map[uint64]portProtoToSelectorAllow
+
+type PerIdentityAllow map[uint32]PortProtoToDNSRule
+
+type DNSRule struct {
+	Identity identity.NumericIdentity
+	Rules    *regexp.Regexp
+}
+
+type PortProtoToDNSRule map[restore.PortProto][]DNSRule
 
 // portProtoToSelectorAllow maps protocol-port numbers to selectors + rules
 type portProtoToSelectorAllow map[restore.PortProto]CachedSelectorREEntry
@@ -657,6 +673,11 @@ func (proxyStat *ProxyRequestContext) IsTimeout() bool {
 	return false
 }
 
+type DNSProxyType string
+
+const DNSProxyTypeDefault DNSProxyType = "default"
+const StandaloneDNSProxy DNSProxyType = "standalone"
+
 // DNSProxyConfig is the configuration for the DNS proxy.
 type DNSProxyConfig struct {
 	Address                string
@@ -667,6 +688,7 @@ type DNSProxyConfig struct {
 	MaxRestoreDNSIPs       int
 	ConcurrencyLimit       int
 	ConcurrencyGracePeriod time.Duration
+	DnsProxyType           DNSProxyType
 }
 
 // StartDNSProxy starts a proxy used for DNS L7 redirects that listens on
@@ -695,6 +717,9 @@ func StartDNSProxy(
 		return nil, errors.New("DNS proxy must have lookupEPFunc and notifyFunc provided")
 	}
 
+	if dnsProxyConfig.DnsProxyType == "" {
+		dnsProxyConfig.DnsProxyType = DNSProxyTypeDefault
+	}
 	p := &DNSProxy{
 		LookupRegisteredEndpoint: lookupEPFunc,
 		LookupSecIDByIP:          lookupSecIDFunc,
@@ -710,6 +735,7 @@ func StartDNSProxy(
 		EnableDNSCompression:     dnsProxyConfig.EnableDNSCompression,
 		maxIPsPerRestoredDNSRule: dnsProxyConfig.MaxRestoreDNSIPs,
 		DNSClients:               NewSharedClients(),
+		dnsProxyType:             dnsProxyConfig.DnsProxyType,
 	}
 	if dnsProxyConfig.ConcurrencyLimit > 0 {
 		p.ConcurrencyLimit = semaphore.NewWeighted(int64(dnsProxyConfig.ConcurrencyLimit))
@@ -807,6 +833,65 @@ func (p *DNSProxy) UpdateAllowed(endpointID uint64, destPortProto restore.PortPr
 	return err
 }
 
+// UpdateAllowedv2 is called by SDP to update the current snapshot of the DNS rules.
+func (p *DNSProxy) UpdateAllowedV2(newPolicyRules *dnsProxyApi.DNSPolicies) error {
+	p.Lock()
+	defer p.Unlock()
+	log.Debugf("Received DNS rules: %v", newPolicyRules)
+
+	var err error
+	var policyRules = make(map[uint32]PortProtoToDNSRule)
+	for _, rule := range newPolicyRules.GetEgressL7DnsPolicy() {
+		//1. Get the source identity
+		sourceIdentity := rule.GetSourceIdentity()
+
+		// 2. Find if the identity is already present in the map
+		_, ok := policyRules[sourceIdentity]
+		if !ok {
+			policyRules[sourceIdentity] = make(PortProtoToDNSRule)
+		}
+
+		// 3. Get the DNS servers
+		for _, dnsServer := range rule.GetDnsServers() {
+			portProto := restore.MakeV2PortProto(uint16(dnsServer.GetDnsServerPort()), u8proto.U8proto(dnsServer.GetDnsServerProto()))
+
+			pattern := GeneratePatternV2(rule.GetDnsPattern())
+			var regex *regexp.Regexp
+			regex, err = p.cache.lookupOrCompileRegex(pattern)
+			if err != nil {
+				break
+			}
+			// 4. Add/Append the DNS Server identities and pattern for this identity and portProto
+			dnsRule := DNSRule{
+				Identity: identity.NumericIdentity(dnsServer.GetDnsServerIdentity()),
+				Rules:    regex,
+			}
+
+			if _, ok := policyRules[sourceIdentity]; !ok {
+				policyRules[sourceIdentity] = make(PortProtoToDNSRule)
+			}
+		
+			policyRules[sourceIdentity][portProto] = append(policyRules[sourceIdentity][portProto], dnsRule)
+		}
+	}
+
+	if err != nil {
+		// Unregister the registered regexes before returning the error to avoid
+		// leaving unused references in the cache
+		for _, portProtoToDNSRule := range policyRules {
+			for _, dnsRules := range portProtoToDNSRule {
+				for _, dnsRule := range dnsRules {
+					p.cache.releaseRegex(dnsRule.Rules)
+				}
+			}
+		}
+		return err
+	}
+	// replace the existing rules with the new rules
+	p.allowedV2 = policyRules
+	return nil
+}
+
 // UpdateAllowedFromSelectorRegexes sets newRules for endpointID and destPort.
 func (p *DNSProxy) UpdateAllowedFromSelectorRegexes(endpointID uint64, destPortProto restore.PortProto, newRules CachedSelectorREEntry) error {
 	p.Lock()
@@ -841,6 +926,35 @@ func (p *DNSProxy) CheckAllowed(endpointID uint64, destPortProto restore.PortPro
 	}
 
 	return false, nil
+}
+
+// CheckAllowed is called by the 
+func (p *DNSProxy) CheckAllowedV2(endpointIdentity uint32, destPortProto restore.PortProto, destID identity.NumericIdentity, destIP netip.Addr, name string) (allowed bool, err error) {
+	name = strings.ToLower(dns.Fqdn(name))
+	p.RLock()
+	defer p.RUnlock()
+
+	allowedRules, exists := p.allowedV2[endpointIdentity][destPortProto]
+	if !exists {
+		return false, nil
+	}
+
+	for _, allowedRule := range allowedRules {
+		if allowedRule.Identity == destID && allowedRule.Rules.MatchString(name) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func allowedIdentity(allowedIdentities []identity.NumericIdentity, destID identity.NumericIdentity) bool {
+	for _, allowedIdentity := range allowedIdentities {
+		if allowedIdentity == destID {
+			return true
+		}
+	}
+	return false
 }
 
 // setSoMarks sets the socket options needed for a transparent proxy to integrate it's upstream
@@ -1015,8 +1129,8 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	scopedLog = scopedLog.WithFields(logrus.Fields{
-		logfields.EndpointID: ep.StringID(),
-		logfields.Identity:   ep.GetIdentity(),
+		logfields.EndpointID: ep.StringID(), // SDP is not aware of endpoint ID, so this will be zero. TODO: Fix this.
+		logfields.Identity: ep.GetIdentity(),
 	})
 
 	proto, targetServer, err := p.lookupTargetDNSServer(w)
@@ -1046,7 +1160,12 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 	// it won't enforce any separation between results from different endpoints.
 	// This isn't ideal but we are trusting the DNS responses anyway.
 	stat.PolicyCheckTime.Start()
-	allowed, err := p.CheckAllowed(uint64(ep.ID), targetServerPortProto, targetServerID, targetServer.Addr(), qname)
+	var allowed bool
+	if p.dnsProxyType == StandaloneDNSProxy {
+		allowed, err = p.CheckAllowedV2(uint32(ep.GetIdentity()), targetServerPortProto, targetServerID, targetServer.Addr(), qname)
+	} else {
+		allowed, err = p.CheckAllowed(uint64(ep.ID), targetServerPortProto, targetServerID, targetServer.Addr(), qname)
+	}
 	stat.PolicyCheckTime.End(err == nil)
 	switch {
 	case err != nil:
@@ -1449,6 +1568,20 @@ func GeneratePattern(l7Rules *policy.PerSelectorPolicy) (pattern string) {
 			}
 			reStrings = append(reStrings, dnsPatternAsRE)
 		}
+	}
+	return "^(?:" + strings.Join(reStrings, "|") + ")$"
+}
+
+func GeneratePatternV2(rules []string) (pattern string) {
+	reStrings := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		rulePattern := matchpattern.Sanitize(rule)
+		ruleAsRE := matchpattern.ToUnAnchoredRegexp(rulePattern)
+		if ruleAsRE == matchpattern.MatchAllUnAnchoredPattern {
+			return matchpattern.MatchAllAnchoredPattern
+		}
+		reStrings = append(reStrings, ruleAsRE)
+
 	}
 	return "^(?:" + strings.Join(reStrings, "|") + ")$"
 }

@@ -21,14 +21,14 @@ type policyCache struct {
 	// Cilium Agent process, these will never need to be garbage
 	// collected.
 	repo     *Repository
-	policies map[identityPkg.NumericIdentity]*cachedSelectorPolicy
+	policies map[identityPkg.NumericIdentity]*CachedSelectorPolicy
 }
 
 // newPolicyCache creates a new cache of SelectorPolicy.
 func newPolicyCache(repo *Repository, idmgr identitymanager.IDManager) *policyCache {
 	cache := &policyCache{
 		repo:     repo,
-		policies: make(map[identityPkg.NumericIdentity]*cachedSelectorPolicy),
+		policies: make(map[identityPkg.NumericIdentity]*CachedSelectorPolicy),
 	}
 	if idmgr != nil {
 		idmgr.Subscribe(cache)
@@ -47,6 +47,19 @@ func (cache *policyCache) lookupOrCreate(identity *identityPkg.Identity) *cached
 		cache.policies[identity.ID] = cip
 	}
 	return cip
+}
+
+// Copy the policy rules and then send
+func (cache *PolicyCache) GetPolicy() map[identityPkg.NumericIdentity]*CachedSelectorPolicy {
+	cache.Lock()
+	defer cache.Unlock()
+
+	snapshot := make(map[identityPkg.NumericIdentity]*CachedSelectorPolicy, len(cache.policies))
+	for k, v := range cache.policies {
+		snapshot[k] = v
+	}
+
+	return snapshot
 }
 
 // delete forgets about any cached SelectorPolicy that this endpoint uses.
@@ -148,18 +161,23 @@ func (cache *policyCache) getAuthTypes(localID, remoteID identityPkg.NumericIden
 	return resTypes
 }
 
-// cachedSelectorPolicy is a wrapper around a selectorPolicy (stored in the
+// CachedSelectorPolicy is a wrapper around a selectorPolicy (stored in the
 // 'policy' field). It is always nested directly in the owning policyCache,
 // and is protected against concurrent writes via the policyCache mutex.
-type cachedSelectorPolicy struct {
+type CachedSelectorPolicy struct {
 	lock.Mutex // lock is needed to synchronize parallel policy updates
 
 	identity *identityPkg.Identity
 	policy   atomic.Pointer[selectorPolicy]
 }
 
+<<<<<<< HEAD
 func newCachedSelectorPolicy(identity *identityPkg.Identity) *cachedSelectorPolicy {
 	cip := &cachedSelectorPolicy{
+=======
+func newCachedSelectorPolicy(identity *identityPkg.Identity, selectorCache *SelectorCache) *CachedSelectorPolicy {
+	cip := &CachedSelectorPolicy{
+>>>>>>> 8215172714 (feat(standalone-dns-proxy):  Standalone dns proxy)
 		identity: identity,
 	}
 	return cip
@@ -168,16 +186,36 @@ func newCachedSelectorPolicy(identity *identityPkg.Identity) *cachedSelectorPoli
 // getPolicy returns a reference to the selectorPolicy that is cached.
 //
 // Users should treat the result as immutable state that MUST NOT be modified.
-func (cip *cachedSelectorPolicy) getPolicy() *selectorPolicy {
+func (cip *CachedSelectorPolicy) getPolicy() *selectorPolicy {
 	return cip.policy.Load()
 }
 
 // setPolicy updates the reference to the SelectorPolicy that is cached.
 // Calls Detach() on the old policy, if any.
-func (cip *cachedSelectorPolicy) setPolicy(policy *selectorPolicy) {
+func (cip *CachedSelectorPolicy) setPolicy(policy *selectorPolicy) {
 	oldPolicy := cip.policy.Swap(policy)
 	if oldPolicy != nil {
 		// Release the references the previous policy holds on the selector cache.
 		oldPolicy.Detach()
 	}
 }
+<<<<<<< HEAD
+=======
+
+// Consume returns the EndpointPolicy that defines connectivity policy to
+// Identities in the specified cache.
+//
+// This denotes that a particular endpoint is 'consuming' the policy from the
+// selector policy cache.
+func (cip *CachedSelectorPolicy) Consume(owner PolicyOwner, redirects map[string]uint16) *EndpointPolicy {
+	// TODO: This currently computes the EndpointPolicy from SelectorPolicy
+	// on-demand, however in future the cip is intended to cache the
+	// EndpointPolicy for this Identity and emit datapath deltas instead.
+	isHost := cip.identity.ID == identityPkg.ReservedIdentityHost
+	return cip.getPolicy().DistillPolicy(owner, redirects, isHost)
+}
+
+func (cip *CachedSelectorPolicy) RedirectFilters() iter.Seq2[*L4Filter, *PerSelectorPolicy] {
+	return cip.getPolicy().RedirectFilters()
+}
+>>>>>>> 8215172714 (feat(standalone-dns-proxy):  Standalone dns proxy)
