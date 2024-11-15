@@ -34,11 +34,6 @@ message DNSResponseData {
     repeated uint32 answer_times = 4;
 }
 
-message Result {
-    bool success = 1;
-    uint32 request_id = 2;
-}
-
 message DNSServer {
     uint32 dns_server_identity = 1;  // Identity of destination DNS server
     uint32 dns_server_port = 2;

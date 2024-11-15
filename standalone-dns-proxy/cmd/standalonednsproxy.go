@@ -35,8 +35,9 @@ var kacp = keepalive.ClientParameters{
 type StandaloneDNSProxyArgs struct {
 	dnsproxy.DNSProxyConfig
 
-	toFqdnServerPort uint16
-	enableL7Proxy    bool
+	toFqdnServerPort         uint16
+	enableL7Proxy            bool
+	enableStandaloneDNsProxy bool
 }
 
 type StandaloneDNSProxy struct {
@@ -141,6 +142,17 @@ func (sdp *StandaloneDNSProxy) ConnectToCiliumAgent() error {
 func (sdp *StandaloneDNSProxy) StartStandaloneDNSProxy() error {
 	var err error
 
+	// Should this be moved above the DNSProxy initialization?
+	// First reason is the livelisness probe should be able to connect to the DNS proxy (for now we don't have a health check)
+	if !sdp.args.enableL7Proxy {
+		log.Info("L7 Proxy is disabled")
+		return nil
+	}
+
+	if !sdp.args.enableStandaloneDNsProxy {
+		log.Info("Standalone DNS Proxy is disabled")
+	}
+
 	// Initialize the DNS Proxy
 	sdp.DNSProxy, err = dnsproxy.StartDNSProxy(sdp.args.DNSProxyConfig, sdp.LookupEPByIP, sdp.LookupSecIDByIP, sdp.LookupIPsBySecID, sdp.NotifyOnDNSMsg)
 	if err != nil {
@@ -148,13 +160,6 @@ func (sdp *StandaloneDNSProxy) StartStandaloneDNSProxy() error {
 		return err
 	}
 	log.Infof("DNS Proxy started on %s:%d", sdp.args.Address, sdp.args.Port)
-
-	// Should this be moved above the DNSProxy initialization?
-	// First reason is the livelisness probe should be able to connect to the DNS proxy (for now we don't have a health check)
-	if !sdp.args.enableL7Proxy {
-		log.Info("L7 Proxy is disabled")
-		return nil
-	}
 
 	// Create the cilium agent connection trigger
 	err = sdp.createCiliumAgentConnectionTrigger()
@@ -360,7 +365,7 @@ func (sdp *StandaloneDNSProxy) subscribeToDNSRules(ctx context.Context) error {
 				Success:   false,
 				RequestId: newRules.GetRequestId(),
 			}
-			err := sdp.DNSProxy.UpdateAllowedV2(newRules)
+			err := sdp.DNSProxy.UpdateAllowedIdentities(newRules)
 			if err != nil {
 				log.WithError(err).Error("Failed to update DNS rules")
 			}

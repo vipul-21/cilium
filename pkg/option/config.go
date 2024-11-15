@@ -141,6 +141,9 @@ const (
 	// EnableL7Proxy is the name of the option to enable L7 proxy
 	EnableL7Proxy = "enable-l7-proxy"
 
+	// EnableStandaloneDNSProxy is the name of the option to enable standalone dns proxy
+	EnableStandaloneDNSProxy = "enable-standalone-dns-proxy"
+
 	// EnableTracing enables tracing mode in the agent.
 	EnableTracing = "enable-tracing"
 
@@ -1544,6 +1547,9 @@ type DaemonConfig struct {
 	// EnableL7Proxy is the option to enable L7 proxy
 	EnableL7Proxy bool
 
+	// EnableStandaloneDNSProxy is the option to enable standalone DNS proxy
+	EnableStandaloneDNSProxy bool
+
 	// EnableIPSec is true when IPSec is enabled
 	EnableIPSec bool
 
@@ -2853,6 +2859,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnablePolicy = strings.ToLower(vp.GetString(EnablePolicy))
 	c.EnableExternalIPs = vp.GetBool(EnableExternalIPs)
 	c.EnableL7Proxy = vp.GetBool(EnableL7Proxy)
+	c.EnableStandaloneDNSProxy = vp.GetBool(EnableStandaloneDNSProxy)
 	c.EnableTracing = vp.GetBool(EnableTracing)
 	c.EnableIPIPTermination = vp.GetBool(EnableIPIPTermination)
 	c.EnableUnreachableRoutes = vp.GetBool(EnableUnreachableRoutes)

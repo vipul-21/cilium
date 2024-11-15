@@ -6,20 +6,19 @@ import (
 	"net"
 	"net/netip"
 
-	pb "github.com/cilium/cilium/api/v1/dnsproxy"
+	dnsRulesApi "github.com/cilium/cilium/api/v1/dnsproxy"
 	"github.com/cilium/cilium/pkg/container/versioned"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
-	identityPkg "github.com/cilium/cilium/pkg/identity"
-	"github.com/cilium/cilium/pkg/lock"
-	"github.com/cilium/dns"
-	"github.com/google/uuid"
-
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
+	"github.com/cilium/cilium/pkg/identity"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/dns"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
@@ -27,18 +26,18 @@ import (
 type updateOnDNSMsgFunc func(lookupTime time.Time, ep *endpoint.Endpoint, qname string, responseIPs []netip.Addr, TTL int, stat *dnsproxy.ProxyRequestContext) error
 
 type FQDNDataServer struct {
-	pb.UnimplementedFQDNDataServer
+	dnsRulesApi.UnimplementedFQDNDataServer
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	endpointManager  *endpointmanager.EndpointManager
-	streams          lock.Map[pb.FQDNData_SubscribeToDNSPoliciesServer, context.CancelFunc]
+	streams          lock.Map[dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer, context.CancelFunc]
 	updateOnDNSMsg   updateOnDNSMsgFunc
 	dnsMappingResult lock.Map[string, bool]
 
 	snapshotMutex   lock.Mutex
-	currentSnapshot map[identityPkg.NumericIdentity]*policy.CachedSelectorPolicy
+	currentSnapshot map[identity.NumericIdentity]*policy.CachedSelectorPolicy
 }
 
 var (
@@ -52,7 +51,7 @@ var (
 	}
 )
 
-func (s *FQDNDataServer) SubscribeToDNSPolicies(stream pb.FQDNData_SubscribeToDNSPoliciesServer) error {
+func (s *FQDNDataServer) SubscribeToDNSPolicies(stream dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer) error {
 	streamCtx, cancel := context.WithCancel(stream.Context())
 	s.streams.Store(stream, cancel)
 
@@ -97,7 +96,7 @@ func (s *FQDNDataServer) SubscribeToDNSPolicies(stream pb.FQDNData_SubscribeToDN
 	}
 }
 
-func (s *FQDNDataServer) ReceiveDNSpolicesACK(stream pb.FQDNData_SubscribeToDNSPoliciesServer) error {
+func (s *FQDNDataServer) ReceiveDNSpolicesACK(stream dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer) error {
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -148,8 +147,8 @@ func NewServer(endpointManager *endpointmanager.EndpointManager, updateOnDNSMsg 
 		updateOnDNSMsg:  updateOnDNSMsg,
 		ctx:             ctx,
 		cancel:          cancel,
-		streams:         lock.Map[pb.FQDNData_SubscribeToDNSPoliciesServer, context.CancelFunc]{},
-		currentSnapshot: make(map[identityPkg.NumericIdentity]*policy.CachedSelectorPolicy),
+		streams:         lock.Map[dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer, context.CancelFunc]{},
+		currentSnapshot: make(map[identity.NumericIdentity]*policy.CachedSelectorPolicy),
 	}
 
 	go func() {
@@ -161,25 +160,24 @@ func NewServer(endpointManager *endpointmanager.EndpointManager, updateOnDNSMsg 
 	return s
 }
 
-func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identityPkg.NumericIdentity]*policy.CachedSelectorPolicy) error {
+func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericIdentity]*policy.CachedSelectorPolicy) error {
 	s.snapshotMutex.Lock()
 	defer s.snapshotMutex.Unlock()
 
 	s.currentSnapshot = policies
 
-	requestId := uuid.New().String()
-	dnsPolices := &pb.DNSPolicies{
-		RequestId: requestId,
-	}
-	egressL7DnsPolicy := make([]*pb.DNSPolicy, 0, len(policies))
+	egressL7DnsPolicy := make([]*dnsRulesApi.DNSPolicy, 0, len(policies))
 	for identity, po := range policies {
-		for l4, _ := range po.RedirectFilters() {
+		for l4 := range po.GetPolicy().RedirectFilters() {
 			parseType := l4.GetL7Parser()
 			if parseType == policy.ParserTypeDNS {
 				for cs, sp := range l4.PerSelectorPolicies {
-					dnsServers := make([]*pb.DNSServer, 0, len(cs.GetSelections(versioned.Latest())))
+					if sp.DNS == nil || len(sp.DNS) == 0 {
+						continue
+					}
+					dnsServers := make([]*dnsRulesApi.DNSServer, 0, len(cs.GetSelections(versioned.Latest())))
 					for _, sel := range cs.GetSelections(versioned.Latest()) {
-						dnsServers = append(dnsServers, &pb.DNSServer{
+						dnsServers = append(dnsServers, &dnsRulesApi.DNSServer{
 							DnsServerIdentity: uint32(sel),
 							DnsServerPort:     uint32(l4.GetPort()),
 							DnsServerProto:    uint32(l4.U8Proto),
@@ -194,7 +192,7 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identityPkg.Numeri
 							dnsPattern = append(dnsPattern, dns.MatchName)
 						}
 					}
-					egressL7DnsPolicy = append(egressL7DnsPolicy, &pb.DNSPolicy{
+					egressL7DnsPolicy = append(egressL7DnsPolicy, &dnsRulesApi.DNSPolicy{
 						SourceIdentity: uint32(identity),
 						DnsServers:     dnsServers,
 						DnsPattern:     dnsPattern,
@@ -204,13 +202,23 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identityPkg.Numeri
 		}
 	}
 
+	if len(egressL7DnsPolicy) == 0 {
+		log.Debugf("No DNS policies to update")
+		return nil
+	}
+
+	requestId := uuid.New().String()
+	dnsPolices := &dnsRulesApi.DNSPolicies{
+		RequestId: requestId,
+	}
+
 	log.Debugf("Current EgressL7DnsPolicy: %v for request Id %v", egressL7DnsPolicy, requestId)
 	dnsPolices.EgressL7DnsPolicy = egressL7DnsPolicy
 
 	log.Debugf("Sending Policy updates to sdp: %v", dnsPolices)
-	s.streams.Range(func(key pb.FQDNData_SubscribeToDNSPoliciesServer, cancel context.CancelFunc) bool {
+	s.streams.Range(func(key dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer, cancel context.CancelFunc) bool {
 		log.Debugf("Sending update to stream: %v", key)
-		stream := key.(pb.FQDNData_SubscribeToDNSPoliciesServer)
+		stream := key.(dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer)
 		s.dnsMappingResult.Store(requestId, false)
 		if err := stream.Send(dnsPolices); err != nil {
 			log.Errorf("Failed to send update: %v", err)
@@ -222,7 +230,7 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identityPkg.Numeri
 	return nil
 }
 
-func (s *FQDNDataServer) DeleteStream(stream pb.FQDNData_SubscribeToDNSPoliciesServer) {
+func (s *FQDNDataServer) DeleteStream(stream dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer) {
 	_, ok := s.streams.Load(stream)
 	if ok {
 		log.Infof("Deleting stream: %v", stream)
@@ -235,7 +243,7 @@ func (s *FQDNDataServer) DeleteStream(stream pb.FQDNData_SubscribeToDNSPoliciesS
 
 // cleanupStreams handles the cleanup of streams when the server's context is cancelled.
 func (s *FQDNDataServer) cleanupStreams() {
-	s.streams.Range(func(key pb.FQDNData_SubscribeToDNSPoliciesServer, cancelFunc context.CancelFunc) bool {
+	s.streams.Range(func(key dnsRulesApi.FQDNData_SubscribeToDNSPoliciesServer, cancelFunc context.CancelFunc) bool {
 		cancelFunc() // Ensure we cancel the context of each stream
 		s.streams.Delete(key)
 		return true
@@ -249,7 +257,7 @@ func (s *FQDNDataServer) cleanupStreams() {
 // 1. Get the endpoint from the IP
 // 2. If the endpoint is not found, return an error
 // 3. If the IPs are not empty, update the cilium agent with the mapping
-func (s *FQDNDataServer) UpdatesMappings(ctx context.Context, mappings *pb.FQDNMapping) (*pb.UpdatesMappingsResult, error) {
+func (s *FQDNDataServer) UpdatesMappings(ctx context.Context, mappings *dnsRulesApi.FQDNMapping) (*dnsRulesApi.UpdatesMappingsResult, error) {
 	log.Debugf("UpdateMappings %v", mappings)
 	now := time.Now()
 	var ips []netip.Addr
@@ -260,12 +268,12 @@ func (s *FQDNDataServer) UpdatesMappings(ctx context.Context, mappings *pb.FQDNM
 	if ep == nil {
 		log.Errorf("endpoint not found for IP: %s", mappings.SourceIp)
 		// return fmt.Errorf("endpoint not found for IP: %s", mappings.ClientIp)
-		return &pb.UpdatesMappingsResult{}, fmt.Errorf("endpoint not found for IP: %s", mappings.SourceIp)
+		return &dnsRulesApi.UpdatesMappingsResult{}, fmt.Errorf("endpoint not found for IP: %s", mappings.SourceIp)
 	}
 
 	if len(mappings.GetIPS()) == 0 {
 		// We don't have any IPs to update the mappings with
-		return &pb.UpdatesMappingsResult{
+		return &dnsRulesApi.UpdatesMappingsResult{
 			Success: true,
 		}, nil
 	}
@@ -277,11 +285,11 @@ func (s *FQDNDataServer) UpdatesMappings(ctx context.Context, mappings *pb.FQDNM
 	if mappings.GetResponseCode() == dns.RcodeSuccess {
 		err := s.updateOnDNSMsg(now, ep, mappings.GetFQDN(), ips, int(mappings.GetTTL()), nil)
 		if err != nil {
-			return &pb.UpdatesMappingsResult{}, fmt.Errorf("cannot update DNS cache: %v", err)
+			return &dnsRulesApi.UpdatesMappingsResult{}, fmt.Errorf("cannot update DNS cache: %v", err)
 		}
 	}
 
-	return &pb.UpdatesMappingsResult{
+	return &dnsRulesApi.UpdatesMappingsResult{
 		Success: true,
 	}, nil
 }
@@ -295,7 +303,7 @@ func RunServer(port int, server *FQDNDataServer) {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	grpcServer := grpc.NewServer(grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
-	pb.RegisterFQDNDataServer(grpcServer, server)
+	dnsRulesApi.RegisterFQDNDataServer(grpcServer, server)
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

@@ -10,7 +10,6 @@
     - [DNSResponseData](#dnsproxy-DNSResponseData)
     - [DNSServer](#dnsproxy-DNSServer)
     - [FQDNMapping](#dnsproxy-FQDNMapping)
-    - [Result](#dnsproxy-Result)
     - [UpdatesMappingsResult](#dnsproxy-UpdatesMappingsResult)
   
     - [FQDNData](#dnsproxy-FQDNData)
@@ -124,22 +123,6 @@
 | source_identity | [uint32](#uint32) |  | Identity of the client making the DNS request |
 | source_ip | [bytes](#bytes) |  | IP address of the client making the DNS request |
 | response_code | [uint32](#uint32) |  |  |
-
-
-
-
-
-
-<a name="dnsproxy-Result"></a>
-
-### Result
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| success | [bool](#bool) |  |  |
-| request_id | [uint32](#uint32) |  |  |
 
 
 

@@ -19,6 +19,7 @@ import (
 	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	"github.com/cilium/cilium/pkg/eventqueue"
 	"github.com/cilium/cilium/pkg/identity"
+	identityPkg "github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	ipcachetypes "github.com/cilium/cilium/pkg/ipcache/types"
 	k8sConst "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
@@ -133,7 +134,8 @@ type PolicyRepository interface {
 	// known to not affect the given identity. Pass a skipRevision of 0 to force
 	// calculation.
 	GetSelectorPolicy(id *identity.Identity, skipRevision uint64, stats GetPolicyStatistics) (SelectorPolicy, uint64, error)
-
+	// GetPolicySnapshot returns a map of all the SelectorPolicies in the repository.
+	GetPolicySnapshot() map[identityPkg.NumericIdentity]*CachedSelectorPolicy
 	GetRevision() uint64
 	GetRulesList() *models.Policy
 	GetSelectorCache() *SelectorCache
@@ -972,4 +974,8 @@ func (r *Repository) GetSelectorPolicy(id *identity.Identity, skipRevision uint6
 	}
 
 	return sp, rev, nil
+}
+// GetPolicySnapshot returns a map of all the SelectorPolicies in the repository.
+func (r *Repository) GetPolicySnapshot() map[identityPkg.NumericIdentity]*CachedSelectorPolicy {
+	return r.policyCache.GetPolicySnapshot()
 }

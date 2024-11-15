@@ -118,7 +118,6 @@ func (r *RedirectSuiteProxy) RemoveNetworkPolicy(ep endpoint.EndpointInfoSource)
 
 // RemoveNetworkPolicy does nothing.
 func (r *RedirectSuiteProxy) UpdateSDP(rules map[identity.NumericIdentity]*policy.CachedSelectorPolicy) {
-	return
 }
 
 // DummyIdentityAllocatorOwner implements

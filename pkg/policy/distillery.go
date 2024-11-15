@@ -38,7 +38,7 @@ func newPolicyCache(repo *Repository, idmgr identitymanager.IDManager) *policyCa
 
 // lookupOrCreate adds the specified Identity to the policy cache, with a reference
 // from the specified Endpoint, then returns the threadsafe copy of the policy.
-func (cache *policyCache) lookupOrCreate(identity *identityPkg.Identity) *cachedSelectorPolicy {
+func (cache *policyCache) lookupOrCreate(identity *identityPkg.Identity) *CachedSelectorPolicy {
 	cache.Lock()
 	defer cache.Unlock()
 	cip, ok := cache.policies[identity.ID]
@@ -50,7 +50,7 @@ func (cache *policyCache) lookupOrCreate(identity *identityPkg.Identity) *cached
 }
 
 // Copy the policy rules and then send
-func (cache *PolicyCache) GetPolicy() map[identityPkg.NumericIdentity]*CachedSelectorPolicy {
+func (cache *policyCache) GetPolicySnapshot() map[identityPkg.NumericIdentity]*CachedSelectorPolicy {
 	cache.Lock()
 	defer cache.Unlock()
 
@@ -71,7 +71,7 @@ func (cache *policyCache) delete(identity *identityPkg.Identity) bool {
 	cip, ok := cache.policies[identity.ID]
 	if ok {
 		delete(cache.policies, identity.ID)
-		cip.getPolicy().Detach()
+		cip.GetPolicy().Detach()
 	}
 	return ok
 }
@@ -99,7 +99,7 @@ func (cache *policyCache) updateSelectorPolicy(identity *identityPkg.Identity) (
 	defer cip.Unlock()
 
 	// Don't resolve policy if it was already done for this or later revision.
-	if selPolicy := cip.getPolicy(); selPolicy != nil && selPolicy.Revision >= cache.repo.GetRevision() {
+	if selPolicy := cip.GetPolicy(); selPolicy != nil && selPolicy.Revision >= cache.repo.GetRevision() {
 		return selPolicy, false, nil
 	}
 
@@ -136,7 +136,7 @@ func (cache *policyCache) getAuthTypes(localID, remoteID identityPkg.NumericIden
 	}
 
 	// SelectorPolicy is const after it has been created, so no locking needed to access it
-	selPolicy := cip.getPolicy()
+	selPolicy := cip.GetPolicy()
 
 	var resTypes AuthTypes
 	for cs, authTypes := range selPolicy.L4Policy.AuthMap {
@@ -171,13 +171,8 @@ type CachedSelectorPolicy struct {
 	policy   atomic.Pointer[selectorPolicy]
 }
 
-<<<<<<< HEAD
-func newCachedSelectorPolicy(identity *identityPkg.Identity) *cachedSelectorPolicy {
-	cip := &cachedSelectorPolicy{
-=======
-func newCachedSelectorPolicy(identity *identityPkg.Identity, selectorCache *SelectorCache) *CachedSelectorPolicy {
+func newCachedSelectorPolicy(identity *identityPkg.Identity) *CachedSelectorPolicy {
 	cip := &CachedSelectorPolicy{
->>>>>>> 8215172714 (feat(standalone-dns-proxy):  Standalone dns proxy)
 		identity: identity,
 	}
 	return cip
@@ -186,7 +181,7 @@ func newCachedSelectorPolicy(identity *identityPkg.Identity, selectorCache *Sele
 // getPolicy returns a reference to the selectorPolicy that is cached.
 //
 // Users should treat the result as immutable state that MUST NOT be modified.
-func (cip *CachedSelectorPolicy) getPolicy() *selectorPolicy {
+func (cip *CachedSelectorPolicy) GetPolicy() *selectorPolicy {
 	return cip.policy.Load()
 }
 
@@ -199,23 +194,3 @@ func (cip *CachedSelectorPolicy) setPolicy(policy *selectorPolicy) {
 		oldPolicy.Detach()
 	}
 }
-<<<<<<< HEAD
-=======
-
-// Consume returns the EndpointPolicy that defines connectivity policy to
-// Identities in the specified cache.
-//
-// This denotes that a particular endpoint is 'consuming' the policy from the
-// selector policy cache.
-func (cip *CachedSelectorPolicy) Consume(owner PolicyOwner, redirects map[string]uint16) *EndpointPolicy {
-	// TODO: This currently computes the EndpointPolicy from SelectorPolicy
-	// on-demand, however in future the cip is intended to cache the
-	// EndpointPolicy for this Identity and emit datapath deltas instead.
-	isHost := cip.identity.ID == identityPkg.ReservedIdentityHost
-	return cip.getPolicy().DistillPolicy(owner, redirects, isHost)
-}
-
-func (cip *CachedSelectorPolicy) RedirectFilters() iter.Seq2[*L4Filter, *PerSelectorPolicy] {
-	return cip.getPolicy().RedirectFilters()
-}
->>>>>>> 8215172714 (feat(standalone-dns-proxy):  Standalone dns proxy)

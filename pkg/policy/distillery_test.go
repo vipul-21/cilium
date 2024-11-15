@@ -118,6 +118,25 @@ func TestCachePopulation(t *testing.T) {
 	require.NotEqual(t, policy1, policy3)
 }
 
+func TestPolicySnapshot(t *testing.T) {
+	repo := NewStoppedPolicyRepository(nil, nil, nil, nil)
+	repo.revision.Store(42)
+	cache := repo.policyCache
+
+	identity1 := ep1.GetSecurityIdentity()
+	policy1, updated, err := cache.updateSelectorPolicy(identity1)
+	require.NoError(t, err)
+	require.True(t, updated)
+
+	// Get a snapshot of the policy cache
+	snapshot := cache.GetPolicySnapshot()
+	require.Len(t, snapshot, 1)
+	for identity, policy := range snapshot {
+		require.Equal(t, identity1.ID, identity)
+		require.Equal(t, policy1, policy.GetPolicy())
+	}
+}
+
 // Distillery integration tests
 
 var (

@@ -136,8 +136,8 @@ type DNSProxy struct {
 	// Note: Simple DNS names, e.g. bar.foo.com, will treat the "." as a literal.
 	allowed perEPAllow
 
-	// Allowed tracked the identities that are allowed to make DNS queries.
-	allowedV2 PerIdentityAllow
+	// allowedIdentities tracked the identities that are allowed to make DNS queries.
+	allowedIdentities PerIdentityAllow
 
 	// restored is a set of rules restored from a previous instance that can be
 	// used until 'allowed' rules for an endpoint are first initialized after
@@ -833,8 +833,8 @@ func (p *DNSProxy) UpdateAllowed(endpointID uint64, destPortProto restore.PortPr
 	return err
 }
 
-// UpdateAllowedv2 is called by SDP to update the current snapshot of the DNS rules.
-func (p *DNSProxy) UpdateAllowedV2(newPolicyRules *dnsProxyApi.DNSPolicies) error {
+// UpdateAllowedIdentities called by SDP to update the current snapshot of the DNS rules.
+func (p *DNSProxy) UpdateAllowedIdentities(newPolicyRules *dnsProxyApi.DNSPolicies) error {
 	p.Lock()
 	defer p.Unlock()
 	log.Debugf("Received DNS rules: %v", newPolicyRules)
@@ -870,7 +870,7 @@ func (p *DNSProxy) UpdateAllowedV2(newPolicyRules *dnsProxyApi.DNSPolicies) erro
 			if _, ok := policyRules[sourceIdentity]; !ok {
 				policyRules[sourceIdentity] = make(PortProtoToDNSRule)
 			}
-		
+
 			policyRules[sourceIdentity][portProto] = append(policyRules[sourceIdentity][portProto], dnsRule)
 		}
 	}
@@ -888,7 +888,7 @@ func (p *DNSProxy) UpdateAllowedV2(newPolicyRules *dnsProxyApi.DNSPolicies) erro
 		return err
 	}
 	// replace the existing rules with the new rules
-	p.allowedV2 = policyRules
+	p.allowedIdentities = policyRules
 	return nil
 }
 
@@ -928,13 +928,13 @@ func (p *DNSProxy) CheckAllowed(endpointID uint64, destPortProto restore.PortPro
 	return false, nil
 }
 
-// CheckAllowed is called by the 
-func (p *DNSProxy) CheckAllowedV2(endpointIdentity uint32, destPortProto restore.PortProto, destID identity.NumericIdentity, destIP netip.Addr, name string) (allowed bool, err error) {
+// CheckAllowedIdentity is called by the standalone DNS proxy to check if the DNS request is allowed.
+func (p *DNSProxy) CheckAllowedIdentity(endpointIdentity uint32, destPortProto restore.PortProto, destID identity.NumericIdentity, destIP netip.Addr, name string) (allowed bool, err error) {
 	name = strings.ToLower(dns.Fqdn(name))
 	p.RLock()
 	defer p.RUnlock()
 
-	allowedRules, exists := p.allowedV2[endpointIdentity][destPortProto]
+	allowedRules, exists := p.allowedIdentities[endpointIdentity][destPortProto]
 	if !exists {
 		return false, nil
 	}
@@ -946,15 +946,6 @@ func (p *DNSProxy) CheckAllowedV2(endpointIdentity uint32, destPortProto restore
 	}
 
 	return false, nil
-}
-
-func allowedIdentity(allowedIdentities []identity.NumericIdentity, destID identity.NumericIdentity) bool {
-	for _, allowedIdentity := range allowedIdentities {
-		if allowedIdentity == destID {
-			return true
-		}
-	}
-	return false
 }
 
 // setSoMarks sets the socket options needed for a transparent proxy to integrate it's upstream
@@ -1130,7 +1121,7 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 
 	scopedLog = scopedLog.WithFields(logrus.Fields{
 		logfields.EndpointID: ep.StringID(), // SDP is not aware of endpoint ID, so this will be zero. TODO: Fix this.
-		logfields.Identity: ep.GetIdentity(),
+		logfields.Identity:   ep.GetIdentity(),
 	})
 
 	proto, targetServer, err := p.lookupTargetDNSServer(w)
@@ -1162,7 +1153,7 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 	stat.PolicyCheckTime.Start()
 	var allowed bool
 	if p.dnsProxyType == StandaloneDNSProxy {
-		allowed, err = p.CheckAllowedV2(uint32(ep.GetIdentity()), targetServerPortProto, targetServerID, targetServer.Addr(), qname)
+		allowed, err = p.CheckAllowedIdentity(uint32(ep.GetIdentity()), targetServerPortProto, targetServerID, targetServer.Addr(), qname)
 	} else {
 		allowed, err = p.CheckAllowed(uint64(ep.ID), targetServerPortProto, targetServerID, targetServer.Addr(), qname)
 	}

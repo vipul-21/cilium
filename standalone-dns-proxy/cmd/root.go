@@ -7,10 +7,9 @@ import (
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/logging"
-	"github.com/cilium/hive/cell"
-
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/hive/cell"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -79,8 +78,9 @@ func registerDNSProxyHooks(lc cell.Lifecycle) {
 			ConcurrencyGracePeriod: option.Config.DNSProxyConcurrencyProcessingGracePeriod,
 			DnsProxyType:           dnsproxy.StandaloneDNSProxy,
 		},
-		toFqdnServerPort: uint16(option.Config.ToFqdnsServerPort),
-		enableL7Proxy:    option.Config.EnableL7Proxy,
+		toFqdnServerPort:         uint16(option.Config.ToFqdnsServerPort),
+		enableL7Proxy:            option.Config.EnableL7Proxy,
+		enableStandaloneDNsProxy: option.Config.EnableStandaloneDNSProxy,
 	}
 
 	sdp := NewStandaloneDNSProxy(args)

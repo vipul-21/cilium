@@ -68,5 +68,4 @@ func (f *FakeEndpointProxy) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, pol
 func (f *FakeEndpointProxy) RemoveNetworkPolicy(ep endpoint.EndpointInfoSource) {}
 
 func (f *FakeEndpointProxy) UpdateSDP(rules map[identityPkg.NumericIdentity]*policy.CachedSelectorPolicy) {
-	return
 }

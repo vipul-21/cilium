@@ -17,9 +17,9 @@ const (
 func PrivilegedTest(tb testing.TB) {
 	tb.Helper()
 
-	if os.Getenv(privilegedEnv) == "" {
-		tb.Skipf("Set %s to run this test", privilegedEnv)
-	}
+	// if os.Getenv(privilegedEnv) == "" {
+	// 	tb.Skipf("Set %s to run this test", privilegedEnv)
+	// }
 }
 
 func IsPrivileged() bool {

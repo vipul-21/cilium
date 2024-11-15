@@ -705,7 +705,7 @@ func (p *Proxy) UpdateSDP(rules map[identityPkg.NumericIdentity]*policy.CachedSe
 	defer p.mutex.Unlock()
 
 	if GlobalStandaloneDNSProxy == nil {
-		return 
+		return
 	}
 
 	GlobalStandaloneDNSProxy.UpdatePolicyRulesLocked(rules)
