@@ -46,6 +46,11 @@ make generate-kvstoremesh-api
 # Generate all hubble api files
 make generate-hubble-api
 
+
+# Generate all sdp api files
+make generate-sdp-api
+
+
 # Ensure new files are also considered in the diff
 git add --intent-to-add .
 
