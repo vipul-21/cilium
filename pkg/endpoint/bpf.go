@@ -640,6 +640,13 @@ func (e *Endpoint) runPreCompilationSteps(regenContext *regenerationContext) (pr
 		}
 	}
 
+	// Once the policy has been calculated, we can update the standalone dns proxy as well.
+	// We need to send the snapshot of the policyRules to SDP.
+	repo := e.policyGetter.GetPolicyRepository()
+	log.Debugf("Updating SDP with policy rules")
+	policyRules := repo.GetPolicySnapshot()
+	e.proxy.UpdateSDP(policyRules)
+
 	// Any possible DNS redirects had their rules updated by 'e.regeneratePolicy' above, so we
 	// can get the new DNS rules for restoration now, before we take the endpoint lock below.
 	// NOTE: Endpoint lock must not be held during 'GetDNSRules' as it locks IPCache, which
