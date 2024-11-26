@@ -26,8 +26,20 @@ const (
 // FQDNDataClient is the client API for FQDNData service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Cilium agent runs the FQDNData service and Standalone DNS proxy connects to it to get the DNS Policy rules.
+// Standalone DNS proxy sends the DNS mappings to cilium agent to update the DNS mappings.
+// CFP: https://github.com/cilium/design-cfps/pull/32
 type FQDNDataClient interface {
+	// SubscribeToDNSPolicies is used by the Standalone DNS proxy to subscribe to DNS policies.
+	// Cilium agent will stream DNS policies to Standalone DNS proxy.
+	// In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe.
+	// In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe.
 	SubscribeToDNSPolicies(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[DNSPoliciesResult, DNSPolicies], error)
+	// UpdatesMappings is used by the Standalone DNS proxy to update the DNS mappings.
+	// In case of any error, SDP will either retry the connection if the error is server side or will error out.
+	// Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same semantics as
+	// the inbuilt dns proxy in cilium.
 	UpdatesMappings(ctx context.Context, in *FQDNMapping, opts ...grpc.CallOption) (*UpdatesMappingsResult, error)
 }
 
@@ -65,8 +77,20 @@ func (c *fQDNDataClient) UpdatesMappings(ctx context.Context, in *FQDNMapping, o
 // FQDNDataServer is the server API for FQDNData service.
 // All implementations should embed UnimplementedFQDNDataServer
 // for forward compatibility.
+//
+// Cilium agent runs the FQDNData service and Standalone DNS proxy connects to it to get the DNS Policy rules.
+// Standalone DNS proxy sends the DNS mappings to cilium agent to update the DNS mappings.
+// CFP: https://github.com/cilium/design-cfps/pull/32
 type FQDNDataServer interface {
+	// SubscribeToDNSPolicies is used by the Standalone DNS proxy to subscribe to DNS policies.
+	// Cilium agent will stream DNS policies to Standalone DNS proxy.
+	// In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe.
+	// In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe.
 	SubscribeToDNSPolicies(grpc.BidiStreamingServer[DNSPoliciesResult, DNSPolicies]) error
+	// UpdatesMappings is used by the Standalone DNS proxy to update the DNS mappings.
+	// In case of any error, SDP will either retry the connection if the error is server side or will error out.
+	// Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same semantics as
+	// the inbuilt dns proxy in cilium.
 	UpdatesMappings(context.Context, *FQDNMapping) (*UpdatesMappingsResult, error)
 }
 

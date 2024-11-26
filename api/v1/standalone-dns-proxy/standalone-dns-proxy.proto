@@ -4,13 +4,32 @@ package standalonednsproxy;
 
 option go_package = "github.com/cilium/cilium/api/v1/standalonednsproxy";
 
+// Cilium agent runs the FQDNData service and Standalone DNS proxy connects to it to get the DNS Policy rules.
+// Standalone DNS proxy sends the DNS mappings to cilium agent to update the DNS mappings.
+// CFP: https://github.com/cilium/design-cfps/pull/32
 service FQDNData {
-  rpc SubscribeToDNSPolicies(stream  DNSPoliciesResult) returns (stream DNSPolicies) {}
-  rpc UpdatesMappings(FQDNMapping) returns (UpdatesMappingsResult) {}
+    // SubscribeToDNSPolicies is used by the Standalone DNS proxy to subscribe to DNS policies.
+    // Cilium agent will stream DNS policies to Standalone DNS proxy.
+    // In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe.
+    // In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe.
+    rpc SubscribeToDNSPolicies(stream  DNSPoliciesResult) returns (stream DNSPolicies) {}
+
+    // UpdatesMappings is used by the Standalone DNS proxy to update the DNS mappings.
+    // In case of any error, SDP will either retry the connection if the error is server side or will error out.
+    // Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same semantics as
+    // the inbuilt dns proxy in cilium.
+    rpc UpdatesMappings(FQDNMapping) returns (UpdatesMappingsResult) {}
+}
+
+enum ResponseCode {
+    RESPONSE_CODE_UNSPECIFIED = 0;
+    RESPONSE_CODE_NO_ERROR = 1;
+    RESPONSE_CODE_FAILURE = 2;
+    RESPONSE_CODE_NOT_IMPLEMENTED = 3;
 }
 
 message DNSPoliciesResult {
-    bool success = 1;
+    ResponseCode response = 1;
     string request_id = 2;
 }
 
@@ -24,14 +43,7 @@ message FQDNMapping {
 }
 
 message UpdatesMappingsResult {
-    bool success = 1;
-}
-
-message DNSResponseData {
-    bool response = 1;
-    repeated string cnames = 2;
-    repeated uint32 qtypes = 3;
-    repeated uint32 answer_times = 4;
+    ResponseCode response = 1;
 }
 
 message DNSServer {

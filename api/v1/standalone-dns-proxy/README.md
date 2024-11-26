@@ -7,10 +7,11 @@
     - [DNSPolicies](#standalonednsproxy-DNSPolicies)
     - [DNSPoliciesResult](#standalonednsproxy-DNSPoliciesResult)
     - [DNSPolicy](#standalonednsproxy-DNSPolicy)
-    - [DNSResponseData](#standalonednsproxy-DNSResponseData)
     - [DNSServer](#standalonednsproxy-DNSServer)
     - [FQDNMapping](#standalonednsproxy-FQDNMapping)
     - [UpdatesMappingsResult](#standalonednsproxy-UpdatesMappingsResult)
+  
+    - [ResponseCode](#standalonednsproxy-ResponseCode)
   
     - [FQDNData](#standalonednsproxy-FQDNData)
   
@@ -49,7 +50,7 @@
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| success | [bool](#bool) |  |  |
+| response | [ResponseCode](#standalonednsproxy-ResponseCode) |  |  |
 | request_id | [string](#string) |  |  |
 
 
@@ -68,24 +69,6 @@
 | source_identity | [uint32](#uint32) |  | Identity of the workload this L7 DNS policy should apply to |
 | dns_pattern | [string](#string) | repeated | Allowed DNS pattern this identity is allowed to resolve. |
 | dns_servers | [DNSServer](#standalonednsproxy-DNSServer) | repeated |  |
-
-
-
-
-
-
-<a name="standalonednsproxy-DNSResponseData"></a>
-
-### DNSResponseData
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| response | [bool](#bool) |  |  |
-| cnames | [string](#string) | repeated |  |
-| qtypes | [uint32](#uint32) | repeated |  |
-| answer_times | [uint32](#uint32) | repeated |  |
 
 
 
@@ -137,13 +120,27 @@
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| success | [bool](#bool) |  |  |
+| response | [ResponseCode](#standalonednsproxy-ResponseCode) |  |  |
 
 
 
 
 
  
+
+
+<a name="standalonednsproxy-ResponseCode"></a>
+
+### ResponseCode
+
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| RESPONSE_CODE_UNSPECIFIED | 0 |  |
+| RESPONSE_CODE_NO_ERROR | 1 |  |
+| RESPONSE_CODE_FAILURE | 2 |  |
+| RESPONSE_CODE_NOT_IMPLEMENTED | 3 |  |
+
 
  
 
@@ -153,12 +150,14 @@
 <a name="standalonednsproxy-FQDNData"></a>
 
 ### FQDNData
-
+Cilium agent runs the FQDNData service and Standalone DNS proxy connects to it to get the DNS Policy rules.
+Standalone DNS proxy sends the DNS mappings to cilium agent to update the DNS mappings.
+CFP: https://github.com/cilium/design-cfps/pull/32
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| SubscribeToDNSPolicies | [DNSPoliciesResult](#standalonednsproxy-DNSPoliciesResult) stream | [DNSPolicies](#standalonednsproxy-DNSPolicies) stream |  |
-| UpdatesMappings | [FQDNMapping](#standalonednsproxy-FQDNMapping) | [UpdatesMappingsResult](#standalonednsproxy-UpdatesMappingsResult) |  |
+| SubscribeToDNSPolicies | [DNSPoliciesResult](#standalonednsproxy-DNSPoliciesResult) stream | [DNSPolicies](#standalonednsproxy-DNSPolicies) stream | SubscribeToDNSPolicies is used by the Standalone DNS proxy to subscribe to DNS policies. Cilium agent will stream DNS policies to Standalone DNS proxy. In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe. In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe. |
+| UpdatesMappings | [FQDNMapping](#standalonednsproxy-FQDNMapping) | [UpdatesMappingsResult](#standalonednsproxy-UpdatesMappingsResult) | UpdatesMappings is used by the Standalone DNS proxy to update the DNS mappings. In case of any error, SDP will either retry the connection if the error is server side or will error out. Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same semantics as the inbuilt dns proxy in cilium. |
 
  
 
