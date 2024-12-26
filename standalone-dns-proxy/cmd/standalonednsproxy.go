@@ -10,7 +10,6 @@ import (
 
 	standalonednsproxy "github.com/cilium/cilium/api/v1/standalone-dns-proxy"
 
-	"github.com/cilium/cilium/standalone-dns-proxy/pkg/maps"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
@@ -65,6 +64,9 @@ type StandaloneDNSProxy struct {
 
 	// args are the arguments for the standalone DNS proxy
 	args *StandaloneDNSProxyArgs
+
+	// IPToIdentity is a map to store the ip to identity mapping
+	IPToIdentity map[string]uint32
 }
 
 // NewStandaloneDNSProxy creates a new standalone DNS proxy
@@ -260,14 +262,21 @@ func (sdp *StandaloneDNSProxy) createciliumAgentConnectionTriggerTrigger() error
 func (sdp *StandaloneDNSProxy) LookupEPByIP(ip netip.Addr) (ep *endpoint.Endpoint, isHost bool, err error) {
 	log.Debugf("LookupEPByIP: %s", ip.String())
 
-	secId, err := maps.GetIdentity(ip)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to get identity for IP %s", ip.String())
-		return nil, false, err
+	// Lookup the Ip for identity in IpToIdentity
+	secId, ok := sdp.IPToIdentity[ip.String()]
+	if !ok {
+		log.Errorf("Failed to get identity for IP %s", ip.String())
+		return nil, false, fmt.Errorf("failed to get identity for IP %s", ip.String())
 	}
+
+	// secId, err := maps.GetIdentity(ip)
+	// if err != nil {
+	// 	log.WithError(err).Errorf("Failed to get identity for IP %s", ip.String())
+	// 	return nil, false, err
+	// }
 	endpt := &endpoint.Endpoint{
 		SecurityIdentity: &identity.Identity{
-			ID: identity.NumericIdentity(secId.SecurityIdentity),
+			ID: identity.NumericIdentity(secId),
 		},
 	}
 	log.Debugf("Endpoint Identity found: %v", endpt)
@@ -281,15 +290,23 @@ func (sdp *StandaloneDNSProxy) LookupIPsBySecID(nid identity.NumericIdentity) []
 
 func (sdp *StandaloneDNSProxy) LookupSecIDByIP(ip netip.Addr) (secID ipcache.Identity, exists bool) {
 	log.Debugf("LookupSecIDByIP: %s", ip.String())
-	secId, err := maps.GetIdentity(ip)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to get identity for IP %s", ip.String())
+
+	// Lookup the Ip for identity in IpToIdentity
+	id, ok := sdp.IPToIdentity[ip.String()]
+	if !ok {
+		log.Errorf("Failed to get identity for IP %s", ip.String())
 		return ipcache.Identity{}, false
 	}
 
-	log.Debugf("Identity found: %v", secId)
+	// secId, err := maps.GetIdentity(ip)
+	// if err != nil {
+	// 	log.WithError(err).Errorf("Failed to get identity for IP %s", ip.String())
+	// 	return ipcache.Identity{}, false
+	// }
+
+	log.Debugf("Identity found: %v", id)
 	return ipcache.Identity{
-		ID:     identity.NumericIdentity(secId.SecurityIdentity),
+		ID:     identity.NumericIdentity(id),
 		Source: source.Local, // Local source means the identity is from the local agent
 	}, true
 }
@@ -347,25 +364,25 @@ func (sdp *StandaloneDNSProxy) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint
 func (sdp *StandaloneDNSProxy) subscribeToDNSRules(ctx context.Context) error {
 	var err error
 	defer func() {
-		// if err != nil {
-		// 	sdp.closeDNSRuleStream()
-		// 	reason := "Failed to subscribe to DNS rules"
-		// 	switch status.Code(err) {
-		// 	case codes.Unavailable:
-		// 		sdp.closeConnection()
-		// 		reason = "DNS server unavailable"
-		// 	default:
-		// 		if err == io.EOF {
-		// 			sdp.closeConnection()
-		// 			reason = "Received EOF from DNS rules stream"
-		// 			log.Error("Received EOF from DNS rules stream")
-		// 		} else {
-		// 			log.WithError(err).Error("Failed to subscribe to DNS rules")
-		// 		}
-		// 	}
-		// 	sdp.ciliumAgentConnectionTrigger.TriggerWithReason(reason)
-		// }
-		// sdp.cancelSubscribeToDNSRules()
+		if err != nil {
+			sdp.closeDNSRuleStream()
+			reason := "Failed to subscribe to DNS rules"
+			switch status.Code(err) {
+			case codes.Unavailable:
+				sdp.closeConnection()
+				reason = "DNS server unavailable"
+			default:
+				if err == io.EOF {
+					sdp.closeConnection()
+					reason = "Received EOF from DNS rules stream"
+					log.Error("Received EOF from DNS rules stream")
+				} else {
+					log.WithError(err).Error("Failed to subscribe to DNS rules")
+				}
+			}
+			sdp.ciliumAgentConnectionTrigger.TriggerWithReason(reason)
+		}
+		sdp.cancelSubscribeToDNSRules()
 	}()
 
 	for {
@@ -393,7 +410,18 @@ func (sdp *StandaloneDNSProxy) subscribeToDNSRules(ctx context.Context) error {
 				Success:   false,
 				RequestId: newRules.GetRequestId(),
 			}
-			err := sdp.DNSProxy.UpdateAllowedIdentities(newRules)
+
+			err := sdp.UpdateIdentityToIPMapping(newRules.GetIdentityToIpMapping())
+			if err != nil {
+				log.WithError(err).Error("Failed to update identity to IP mapping")
+				err = sdp.dnsRulesStream.Send(response)
+				if err != nil {
+					log.WithError(err).Error("Failed to send DNS policies result")
+					return err
+				}
+				return err
+			}
+			err = sdp.DNSProxy.UpdateAllowedIdentities(newRules)
 			if err != nil {
 				log.WithError(err).Error("Failed to update DNS rules")
 				err = sdp.dnsRulesStream.Send(response)
@@ -411,6 +439,23 @@ func (sdp *StandaloneDNSProxy) subscribeToDNSRules(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (sdp *StandaloneDNSProxy) UpdateIdentityToIPMapping(mapping []*standalonednsproxy.IdentityToIPMapping) error {
+
+	// Create a map to store the ip to identity mapping
+	ipToIdentity := make(map[string]uint32)
+	for _, m := range mapping {
+		// Map each ip to the identity
+		secID := m.GetIdentity()
+		ips := m.GetIp()
+		for _, ip := range ips {
+			ipToIdentity[string(ip)] = secID
+		}
+	}
+	sdp.IPToIdentity = ipToIdentity
+
+	return nil
 }
 
 func (sdp *StandaloneDNSProxy) closeDNSRuleStream() {

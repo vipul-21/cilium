@@ -529,6 +529,7 @@ func (d *Daemon) updateOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, qna
 func (d *Daemon) bootstrapStandaloneDNSProxyServer() {
 	sdpServer := service.NewServer(d.endpointManager, d.updateOnDNSMsg)
 	proxy.GlobalStandaloneDNSProxy = sdpServer
+	d.ipcache.AddListener(sdpServer)
 
 	go service.RunServer(option.Config.ToFqdnsServerPort, sdpServer)
 }

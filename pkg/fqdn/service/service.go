@@ -7,11 +7,13 @@ import (
 	"net/netip"
 
 	standalonednsproxy "github.com/cilium/cilium/api/v1/standalone-dns-proxy"
+	"github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/container/versioned"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/identity"
+	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -47,6 +49,8 @@ type FQDNDataServer struct {
 
 	// currentSnapshot is the current state of the DNS rules
 	currentSnapshot map[identity.NumericIdentity]policy.SelectorPolicy
+
+	currentIdentity map[identity.NumericIdentity][]net.IP
 }
 
 var (
@@ -165,11 +169,12 @@ func NewServer(endpointManager endpointmanager.EndpointManager, updateOnDNSMsg u
 	ctx := context.Background()
 
 	s := &FQDNDataServer{
-		endpointManager: endpointManager,
-		updateOnDNSMsg:  updateOnDNSMsg,
-		ctx:             ctx,
-		streams:         lock.Map[standalonednsproxy.FQDNData_SubscribeToDNSPoliciesServer, context.CancelFunc]{},
-		currentSnapshot: make(map[identity.NumericIdentity]policy.SelectorPolicy),
+		endpointManager:      endpointManager,
+		updateOnDNSMsg:       updateOnDNSMsg,
+		ctx:                  ctx,
+		streams:              lock.Map[standalonednsproxy.FQDNData_SubscribeToDNSPoliciesServer, context.CancelFunc]{},
+		currentSnapshot:      make(map[identity.NumericIdentity]policy.SelectorPolicy),
+		currentIdentity:      make(map[identity.NumericIdentity][]net.IP),
 	}
 
 	go func() {
@@ -180,6 +185,107 @@ func NewServer(endpointManager endpointmanager.EndpointManager, updateOnDNSMsg u
 	}()
 
 	return s
+}
+
+// // OnIPIdentityCacheChange is a method to satisfy the ipcache.IPIdentityMappingListener interface
+func (s *FQDNDataServer) OnIPIdentityCacheChange(modType ipcache.CacheModification, cidr types.PrefixCluster, oldHostIP, newHostIP net.IP, oldID *ipcache.Identity, newID ipcache.Identity, encryptKey uint8, k8sMeta *ipcache.K8sMetadata) {
+	s.snapshotMutex.Lock()
+	defer s.snapshotMutex.Unlock()
+
+	switch modType {
+	case ipcache.Upsert:
+		log.Debugf("Upsert")
+		// Need to check what oldID is used for
+		s.currentIdentity[newID.ID] = append(s.currentIdentity[newID.ID], cidr.AsIPNet().IP)
+
+	case ipcache.Delete:
+		if oldID != nil {
+			// remove cidr from the identity
+			delete(s.currentIdentity, oldID.ID)
+		}
+	}
+
+	// Optimize this
+	egressL7DnsPolicy := make([]*standalonednsproxy.DNSPolicy, 0, len(s.currentSnapshot))
+	identityToIPMapping := make([]*standalonednsproxy.IdentityToIPMapping, 0, len(s.currentSnapshot))
+	for identity, pol := range s.currentSnapshot {
+		for l4 := range pol.RedirectFilters() {
+			parseType := l4.GetL7Parser()
+			if parseType == policy.ParserTypeDNS {
+				if l4.PerSelectorPolicies == nil {
+					continue
+				}
+				for cs, sp := range l4.PerSelectorPolicies {
+					if len(sp.DNS) == 0 {
+						continue
+					}
+					dnsServers := make([]*standalonednsproxy.DNSServer, 0, len(cs.GetSelections(versioned.Latest())))
+					for _, sel := range cs.GetSelections(versioned.Latest()) {
+						dnsServers = append(dnsServers, &standalonednsproxy.DNSServer{
+							DnsServerIdentity: uint32(sel),
+							DnsServerPort:     uint32(l4.GetPort()),
+							DnsServerProto:    uint32(l4.U8Proto),
+						})
+
+						// Optimize the identityToIPMapping
+						identityToIPMapping = append(identityToIPMapping, &standalonednsproxy.IdentityToIPMapping{
+							Identity: uint32(sel),
+							Ip:       convertToBytes(s.currentIdentity[sel]),
+						})
+					}
+					dnsPattern := make([]string, 0, len(sp.DNS))
+					for _, dns := range sp.DNS {
+						if dns.MatchPattern != "" {
+							dnsPattern = append(dnsPattern, dns.MatchPattern)
+						}
+						if dns.MatchName != "" {
+							dnsPattern = append(dnsPattern, dns.MatchName)
+						}
+					}
+					egressL7DnsPolicy = append(egressL7DnsPolicy, &standalonednsproxy.DNSPolicy{
+						SourceIdentity: uint32(identity),
+						DnsServers:     dnsServers,
+						DnsPattern:     dnsPattern,
+					})
+
+					// Optimize the identityToIPMapping
+					identityToIPMapping = append(identityToIPMapping, &standalonednsproxy.IdentityToIPMapping{
+						Identity: uint32(identity),
+						Ip:       convertToBytes(s.currentIdentity[identity]),
+					})
+				}
+			}
+		}
+	}
+
+	requestId := uuid.New().String()
+	dnsPolices := &standalonednsproxy.DNSPolicies{
+		IdentityToIpMapping: identityToIPMapping,
+		RequestId:           requestId,
+	}
+
+	log.Debugf("Current EgressL7DnsPolicy: %v for request Id %v", egressL7DnsPolicy, requestId)
+	dnsPolices.EgressL7DnsPolicy = egressL7DnsPolicy
+
+	log.Debugf("Sending Policy updates to sdp: %v", dnsPolices)
+	s.streams.Range(func(stream standalonednsproxy.FQDNData_SubscribeToDNSPoliciesServer, cancel context.CancelFunc) bool {
+		log.Debugf("Sending update to stream: %v", stream)
+		s.dnsMappingResult.Store(requestId, false)
+		if err := stream.Send(dnsPolices); err != nil {
+			log.Errorf("Failed to send update: %v", err)
+			// Cancel the goroutine and remove the stream from the map
+			cancel()
+		}
+		return true
+	})
+}
+
+func convertToBytes(ips []net.IP) [][]byte {
+	var byteIps [][]byte
+	for _, i := range ips {
+		byteIps = append(byteIps, []byte(i.String()))
+	}
+	return byteIps
 }
 
 // UpdatePolicyRulesLocked updates the current state of the DNS rules
@@ -193,6 +299,7 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericId
 	s.currentSnapshot = policies
 
 	egressL7DnsPolicy := make([]*standalonednsproxy.DNSPolicy, 0, len(policies))
+	identityToIPMapping := make([]*standalonednsproxy.IdentityToIPMapping, 0, len(policies))
 	for identity, pol := range policies {
 		for l4 := range pol.RedirectFilters() {
 			parseType := l4.GetL7Parser()
@@ -211,6 +318,12 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericId
 							DnsServerPort:     uint32(l4.GetPort()),
 							DnsServerProto:    uint32(l4.U8Proto),
 						})
+
+						// Optimize the identityToIPMapping
+						identityToIPMapping = append(identityToIPMapping, &standalonednsproxy.IdentityToIPMapping{
+							Identity: uint32(sel),
+							Ip:       convertToBytes(s.currentIdentity[sel]),
+						})
 					}
 					dnsPattern := make([]string, 0, len(sp.DNS))
 					for _, dns := range sp.DNS {
@@ -226,6 +339,12 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericId
 						DnsServers:     dnsServers,
 						DnsPattern:     dnsPattern,
 					})
+
+					// Optimize the identityToIPMapping
+					identityToIPMapping = append(identityToIPMapping, &standalonednsproxy.IdentityToIPMapping{
+						Identity: uint32(identity),
+						Ip:       convertToBytes(s.currentIdentity[identity]),
+					})
 				}
 			}
 		}
@@ -233,7 +352,8 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericId
 
 	requestId := uuid.New().String()
 	dnsPolices := &standalonednsproxy.DNSPolicies{
-		RequestId: requestId,
+		IdentityToIpMapping: identityToIPMapping,
+		RequestId:           requestId,
 	}
 
 	log.Debugf("Current EgressL7DnsPolicy: %v for request Id %v", egressL7DnsPolicy, requestId)

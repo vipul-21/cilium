@@ -754,6 +754,15 @@ func StartDNSProxy(
 		err        error
 	)
 
+	p.BindPort = dnsProxyConfig.Port
+
+	// This is being called by SDP as well as inbuilt DNS proxy.
+	// In case of SDP only, cilium agent will be sending `true` for disableDNSProxy and
+	// sdp will be sending `false` so that we can bind the dns proxy through sdp.
+	if p.DNSProxyType == DefaultDNSProxy {
+		log.Info("DNS proxy is disabled")
+		return p, nil
+	}
 	start := time.Now()
 	for time.Since(start) < ProxyBindTimeout {
 		dnsServers, bindPort, err = bindToAddr(dnsProxyConfig.Address, dnsProxyConfig.Port, p, dnsProxyConfig.IPv4, dnsProxyConfig.IPv6, p.DNSClients)

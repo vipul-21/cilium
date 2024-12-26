@@ -9,6 +9,11 @@ service FQDNData {
   rpc UpdatesMappings(FQDNMapping) returns (UpdatesMappingsResult) {}
 }
 
+message IdentityToIPMapping {
+    uint32 identity = 1;
+    repeated bytes ip = 2;
+}
+
 message DNSPoliciesResult {
     bool success = 1;
     string request_id = 2;
@@ -48,5 +53,6 @@ message DNSPolicy {
 
 message DNSPolicies {
     repeated DNSPolicy egress_l7_dns_policy = 1;
-    string request_id = 2; // Random UUID based identifier which will be referenced in ACKs
+    repeated IdentityToIPMapping identity_to_ip_mapping = 2;
+    string request_id = 3; // Random UUID based identifier which will be referenced in ACKs
 }
