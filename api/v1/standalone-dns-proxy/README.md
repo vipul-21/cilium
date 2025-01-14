@@ -9,6 +9,7 @@
     - [DNSPolicy](#standalonednsproxy-DNSPolicy)
     - [DNSServer](#standalonednsproxy-DNSServer)
     - [FQDNMapping](#standalonednsproxy-FQDNMapping)
+    - [IdentityToIPMapping](#standalonednsproxy-IdentityToIPMapping)
     - [UpdatesMappingsResult](#standalonednsproxy-UpdatesMappingsResult)
   
     - [ResponseCode](#standalonednsproxy-ResponseCode)
@@ -36,6 +37,7 @@
 | ----- | ---- | ----- | ----------- |
 | egress_l7_dns_policy | [DNSPolicy](#standalonednsproxy-DNSPolicy) | repeated |  |
 | request_id | [string](#string) |  | Random UUID based identifier which will be referenced in ACKs |
+| identity_to_ip_mapping | [IdentityToIPMapping](#standalonednsproxy-IdentityToIPMapping) | repeated | Identity to IP mapping for the DNS server and the source identity |
 
 
 
@@ -106,6 +108,22 @@
 | source_identity | [uint32](#uint32) |  | Identity of the client making the DNS request |
 | source_ip | [bytes](#bytes) |  | IP address of the client making the DNS request |
 | response_code | [uint32](#uint32) |  |  |
+
+
+
+
+
+
+<a name="standalonednsproxy-IdentityToIPMapping"></a>
+
+### IdentityToIPMapping
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| identity | [uint32](#uint32) |  |  |
+| ip | [bytes](#bytes) | repeated |  |
 
 
 
