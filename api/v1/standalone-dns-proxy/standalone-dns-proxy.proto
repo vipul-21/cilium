@@ -8,12 +8,12 @@ option go_package = "github.com/cilium/cilium/api/v1/standalonednsproxy";
 // Standalone DNS proxy sends the DNS mappings to cilium agent to update the DNS mappings.
 // CFP: https://github.com/cilium/design-cfps/pull/32
 service FQDNData {
-    // SubscribeToDNSPolicies is used by the Standalone DNS proxy to subscribe to DNS policies.
-    // Cilium agent will stream DNS policies to Standalone DNS proxy.
+    // StreamPolicyState is used by the Standalone DNS proxy to get the current policy state. 
+    // Policy state includes the DNS policies and the identity to IP mapping.
+    // Cilium agent will stream DNS policies state to Standalone DNS proxy.
     // In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe.
     // In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe.
-    rpc SubscribeToDNSPolicies(stream  DNSPoliciesResult) returns (stream DNSPolicies) {}
-
+    rpc StreamPolicyState(stream PolicyStateAck) returns (stream PolicyState) {}
     // UpdatesMappings is used by the Standalone DNS proxy to update the DNS mappings.
     // In case of any error, SDP will either retry the connection if the error is server side or will error out.
     // Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same semantics as
@@ -28,7 +28,7 @@ enum ResponseCode {
     RESPONSE_CODE_NOT_IMPLEMENTED = 3;
 }
 
-message DNSPoliciesResult {
+message PolicyStateAck {
     ResponseCode response = 1;
     string request_id = 2;
 }
@@ -58,7 +58,13 @@ message DNSPolicy {
     repeated DNSServer dns_servers = 3;
 }
 
-message DNSPolicies {
+message PolicyState {
     repeated DNSPolicy egress_l7_dns_policy = 1;
     string request_id = 2; // Random UUID based identifier which will be referenced in ACKs
+    repeated IdentityToIPMapping identity_to_ip_mapping = 3; // Identity to IP mapping for the DNS server and the source identity
+}
+
+message IdentityToIPMapping {
+    uint32 identity = 1;
+    repeated bytes ip = 2;
 }

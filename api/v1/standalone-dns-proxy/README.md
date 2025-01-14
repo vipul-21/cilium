@@ -4,11 +4,12 @@
 ## Table of Contents
 
 - [standalone-dns-proxy/standalone-dns-proxy.proto](#standalone-dns-proxy_standalone-dns-proxy-proto)
-    - [DNSPolicies](#standalonednsproxy-DNSPolicies)
-    - [DNSPoliciesResult](#standalonednsproxy-DNSPoliciesResult)
     - [DNSPolicy](#standalonednsproxy-DNSPolicy)
     - [DNSServer](#standalonednsproxy-DNSServer)
     - [FQDNMapping](#standalonednsproxy-FQDNMapping)
+    - [IdentityToIPMapping](#standalonednsproxy-IdentityToIPMapping)
+    - [PolicyState](#standalonednsproxy-PolicyState)
+    - [PolicyStateAck](#standalonednsproxy-PolicyStateAck)
     - [UpdatesMappingsResult](#standalonednsproxy-UpdatesMappingsResult)
   
     - [ResponseCode](#standalonednsproxy-ResponseCode)
@@ -23,38 +24,6 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## standalone-dns-proxy/standalone-dns-proxy.proto
-
-
-
-<a name="standalonednsproxy-DNSPolicies"></a>
-
-### DNSPolicies
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| egress_l7_dns_policy | [DNSPolicy](#standalonednsproxy-DNSPolicy) | repeated |  |
-| request_id | [string](#string) |  | Random UUID based identifier which will be referenced in ACKs |
-
-
-
-
-
-
-<a name="standalonednsproxy-DNSPoliciesResult"></a>
-
-### DNSPoliciesResult
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| response | [ResponseCode](#standalonednsproxy-ResponseCode) |  |  |
-| request_id | [string](#string) |  |  |
-
-
-
 
 
 
@@ -112,6 +81,55 @@
 
 
 
+<a name="standalonednsproxy-IdentityToIPMapping"></a>
+
+### IdentityToIPMapping
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| identity | [uint32](#uint32) |  |  |
+| ip | [bytes](#bytes) | repeated |  |
+
+
+
+
+
+
+<a name="standalonednsproxy-PolicyState"></a>
+
+### PolicyState
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| egress_l7_dns_policy | [DNSPolicy](#standalonednsproxy-DNSPolicy) | repeated |  |
+| request_id | [string](#string) |  | Random UUID based identifier which will be referenced in ACKs |
+| identity_to_ip_mapping | [IdentityToIPMapping](#standalonednsproxy-IdentityToIPMapping) | repeated | Identity to IP mapping for the DNS server and the source identity |
+
+
+
+
+
+
+<a name="standalonednsproxy-PolicyStateAck"></a>
+
+### PolicyStateAck
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| response | [ResponseCode](#standalonednsproxy-ResponseCode) |  |  |
+| request_id | [string](#string) |  |  |
+
+
+
+
+
+
 <a name="standalonednsproxy-UpdatesMappingsResult"></a>
 
 ### UpdatesMappingsResult
@@ -156,7 +174,7 @@ CFP: https://github.com/cilium/design-cfps/pull/32
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| SubscribeToDNSPolicies | [DNSPoliciesResult](#standalonednsproxy-DNSPoliciesResult) stream | [DNSPolicies](#standalonednsproxy-DNSPolicies) stream | SubscribeToDNSPolicies is used by the Standalone DNS proxy to subscribe to DNS policies. Cilium agent will stream DNS policies to Standalone DNS proxy. In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe. In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe. |
+| StreamPolicyState | [PolicyStateAck](#standalonednsproxy-PolicyStateAck) stream | [PolicyState](#standalonednsproxy-PolicyState) stream | StreamPolicyState is used by the Standalone DNS proxy to get the current policy state. Policy state includes the DNS policies and the identity to IP mapping. Cilium agent will stream DNS policies state to Standalone DNS proxy. In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe. In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe. |
 | UpdatesMappings | [FQDNMapping](#standalonednsproxy-FQDNMapping) | [UpdatesMappingsResult](#standalonednsproxy-UpdatesMappingsResult) | UpdatesMappings is used by the Standalone DNS proxy to update the DNS mappings. In case of any error, SDP will either retry the connection if the error is server side or will error out. Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same semantics as the inbuilt dns proxy in cilium. |
 
  

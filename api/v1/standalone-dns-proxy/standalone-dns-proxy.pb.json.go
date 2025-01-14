@@ -8,14 +8,14 @@ import (
 )
 
 // MarshalJSON implements json.Marshaler
-func (msg *DNSPoliciesResult) MarshalJSON() ([]byte, error) {
+func (msg *PolicyStateAck) MarshalJSON() ([]byte, error) {
 	return protojson.MarshalOptions{
 		UseProtoNames: true,
 	}.Marshal(msg)
 }
 
 // UnmarshalJSON implements json.Unmarshaler
-func (msg *DNSPoliciesResult) UnmarshalJSON(b []byte) error {
+func (msg *PolicyStateAck) UnmarshalJSON(b []byte) error {
 	return protojson.UnmarshalOptions{}.Unmarshal(b, msg)
 }
 
@@ -68,13 +68,25 @@ func (msg *DNSPolicy) UnmarshalJSON(b []byte) error {
 }
 
 // MarshalJSON implements json.Marshaler
-func (msg *DNSPolicies) MarshalJSON() ([]byte, error) {
+func (msg *PolicyState) MarshalJSON() ([]byte, error) {
 	return protojson.MarshalOptions{
 		UseProtoNames: true,
 	}.Marshal(msg)
 }
 
 // UnmarshalJSON implements json.Unmarshaler
-func (msg *DNSPolicies) UnmarshalJSON(b []byte) error {
+func (msg *PolicyState) UnmarshalJSON(b []byte) error {
+	return protojson.UnmarshalOptions{}.Unmarshal(b, msg)
+}
+
+// MarshalJSON implements json.Marshaler
+func (msg *IdentityToIPMapping) MarshalJSON() ([]byte, error) {
+	return protojson.MarshalOptions{
+		UseProtoNames: true,
+	}.Marshal(msg)
+}
+
+// UnmarshalJSON implements json.Unmarshaler
+func (msg *IdentityToIPMapping) UnmarshalJSON(b []byte) error {
 	return protojson.UnmarshalOptions{}.Unmarshal(b, msg)
 }
