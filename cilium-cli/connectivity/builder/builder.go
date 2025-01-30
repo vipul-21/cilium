@@ -231,6 +231,7 @@ func concurrentTests(connTests []*check.ConnectivityTest) error {
 		toCidrExternalKnp{},
 		fromCidrHostNetns{},
 		echoIngressFromOtherClientDeny{},
+		checkStandaloneDnsProxy{},
 		clientIngressFromOtherClientIcmpDeny{},
 		clientEgressToEchoDeny{},
 		clientIngressToEchoNamedPortDeny{},
