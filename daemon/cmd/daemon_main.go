@@ -805,6 +805,9 @@ func InitGlobalFlags(cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.EnableStandaloneDNSProxy, false, "Enables standalone dns proxy.")
 	option.BindEnv(vp, option.EnableStandaloneDNSProxy)
 
+	flags.Bool(option.DisableEmbeddedDNSProxy, false, "Disables embedded DNS proxy.")
+	option.BindEnv(vp, option.DisableEmbeddedDNSProxy)
+
 	flags.Int(option.ToFQDNsProxyPort, 0, "Global port on which the in-agent DNS proxy should listen. Default 0 is a OS-assigned port.")
 	option.BindEnv(vp, option.ToFQDNsProxyPort)
 

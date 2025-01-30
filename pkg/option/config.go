@@ -432,6 +432,9 @@ const (
 	// EnableStandaloneDNSProxy is the name of the option to enable standalone dns proxy
 	EnableStandaloneDNSProxy = "enable-standalone-dns-proxy"
 
+	// DisableEmbeddedDNSProxy is the name of the option to disable embedded dns proxy
+	DisableEmbeddedDNSProxy = "disable-embedded-dns-proxy"
+
 	// ToFQDNsServerAddr is the port on which the standalone grpc server should listen.
 	ToFqdnsServerPort = "tofqdns-server-port"
 
@@ -1541,6 +1544,9 @@ type DaemonConfig struct {
 
 	// EnableStandaloneDNSProxy is the option to enable standalone DNS proxy
 	EnableStandaloneDNSProxy bool
+
+	// DisableEmbeddedDNSProxy is the option to disable the embedded dns proxy in cilium agent
+	DisableEmbeddedDNSProxy bool
 
 	// EnableIPv6NDP is true when NDP is enabled for IPv6
 	EnableIPv6NDP bool
@@ -2938,6 +2944,7 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.EnableIPv4EgressGateway = vp.GetBool(EnableIPv4EgressGateway)
 	c.EnableEnvoyConfig = vp.GetBool(EnableEnvoyConfig)
 	c.EnableStandaloneDNSProxy = vp.GetBool(EnableStandaloneDNSProxy)
+	c.DisableEmbeddedDNSProxy = vp.GetBool(DisableEmbeddedDNSProxy)
 	c.IPMasqAgentConfigPath = vp.GetString(IPMasqAgentConfigPath)
 	c.InstallIptRules = vp.GetBool(InstallIptRules)
 	c.IPSecKeyFile = vp.GetString(IPSecKeyFileName)
@@ -3105,6 +3112,10 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 		if !c.EnableL7Proxy {
 			log.Fatalf("Standalone DNS proxy requires L7 proxy to be enabled")
 		}
+	}
+
+	if c.DisableEmbeddedDNSProxy && !c.EnableL7Proxy {
+		log.Warn("L7 proxy is not enabled. Disabling embedded DNS proxy has no effect")
 	}
 
 	// toFQDNs options
