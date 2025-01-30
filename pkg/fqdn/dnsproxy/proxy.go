@@ -697,6 +697,7 @@ type DNSProxyConfig struct {
 	ConcurrencyLimit       int
 	ConcurrencyGracePeriod time.Duration
 	DNSProxyType           DNSProxyType
+	DisableDNSProxy        bool
 }
 
 // StartDNSProxy starts a proxy used for DNS L7 redirects that listens on
@@ -754,6 +755,9 @@ func StartDNSProxy(
 	}
 	p.rejectReply.Store(dns.RcodeRefused)
 
+	if dnsProxyConfig.DisableDNSProxy {
+		return p, nil
+	}
 	// Start the DNS listeners on UDP and TCP for IPv4 and/or IPv6
 	var (
 		dnsServers []*dns.Server
