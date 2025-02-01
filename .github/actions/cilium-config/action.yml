@@ -64,6 +64,15 @@ inputs:
   bgp-control-plane:
     description: 'Enable BGP Control Plane'
     default: 'false'
+  l7-proxy:
+    description: 'Enable L7 proxy'
+    default: 'false'
+  embedded-dns-proxy:
+    description: 'Enable embedded DNS proxy'
+    default: 'false'
+  standalone-dns-proxy:
+    description: 'Enable standalone DNS proxy'
+    default: 'false'
 outputs:
   config:
     description: 'Cilium installation config'
@@ -186,6 +195,18 @@ runs:
           BGP_CONTROL_PLANE=""
           if [ "${{ inputs.bgp-control-plane }}" == "true" ]; then
             BGP_CONTROL_PLANE="${{ env.BGP_CONTROL_PLANE_HELM_VALUES }}"
+          fi
+
+          if [ "${{ inputs.l7-proxy }}" == "true" ]; then
+            L7_PROXY="--helm-set=l7Proxy.enabled=true"
+          fi
+
+          if [ "${{ inputs.embedded-dns-proxy }}" == "true" ]; then
+            EMBEDDED_DNS_PROXY="--helm-set=embeddedDnsProxy.enabled=true"
+          fi
+
+          if [ "${{ inputs.standalone-dns-proxy }}" == "true" ]; then
+            STANDALONE_DNS_PROXY="--helm-set=standaloneDnsProxy.enabled=true"
           fi
 
           CONFIG="${DEFAULTS} ${IMAGE} ${TUNNEL} ${DEVICES} ${LB_MODE} ${ENDPOINT_ROUTES} ${IPV6} ${MASQ} ${EGRESS_GATEWAY} ${ENCRYPT} ${HOST_FW} ${LB_ACCELERATION} ${INGRESS_CONTROLLER} ${CILIUMENDPOINTSLICE} ${LOCAL_REDIRECT_POLICY} ${BGP_CONTROL_PLANE}"

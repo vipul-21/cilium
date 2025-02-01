@@ -492,6 +492,14 @@ jobs:
             endpoint-routes: 'true'
             egress-gateway: 'true'
             ingress-controller: 'true'
+        
+          - name: '32'
+            kernel: '6.12-20241218.004849'
+            kube-proxy: 'none'
+            kpr: 'true'
+            l7-proxy: 'true'
+            standalone-dns-proxy: 'true'
+            embedded-dns-proxy: 'false'
 
           # Example of a feature that is being introduced, and we want to test
           # it without performing an upgrade, we use skip-upgrade: 'true'
@@ -558,6 +566,9 @@ jobs:
           ciliumendpointslice: ${{ matrix.ciliumendpointslice }}
           local-redirect-policy: ${{ matrix.local-redirect-policy }}
           bgp-control-plane: ${{ matrix.bgp-control-plane }}
+          l7-proxy: ${{ matrix.l7-proxy }}
+          embedded-dns-proxy: ${{ matrix.embedded-dns-proxy }}
+          standalone-dns-proxy: ${{ matrix.standalone-dns-proxy }}
 
       - name: Derive newest Cilium installation config
         id: cilium-newest-config
@@ -823,6 +834,37 @@ jobs:
             echo "# Retrieving Cilium etcd logs"
             kubectl -n kube-system logs kvstore
           fi
+
+      - name: Make Cilium  down${{ steps.vars.outputs.downgrade_version }}
+        if: ${{ matrix.standalone-dns-proxy == 'true' }}
+        shell: bash
+        run: |
+          cilium upgrade \
+            --set image.override=quay.io/cilium/cilium:invalid-image
+
+          # cilium status --wait --interactive=false --wait-duration=10m
+          kubectl get pods --all-namespaces -o wide
+          # kubectl -n kube-system exec daemonset/cilium -- cilium status
+
+      - name: Test Cilium after Down
+        if: ${{ matrix.standalone-dns-proxy == 'true' }}
+        shell: bash
+        run: |
+          cilium connectivity test
+
+      - name: Run sequential Cilium tests
+        if: ${{ matrix.standalone-dns-proxy == 'true' }}
+        shell: bash
+        run: |
+          cilium connectivity test \
+            --test "seq-.*" \
+            ${{ steps.cli-flags.outputs.flags }}
+
+      - name: Features tested after downgrade
+        uses: ./.github/actions/feature-status
+        with:
+          title: "Summary of all features tested after downgrade"
+          json-filename: "${{ env.job_name }} (${{ matrix.name }}) - after downgrade"
 
       - name: Upload artifacts
         if: ${{ !success() }}
