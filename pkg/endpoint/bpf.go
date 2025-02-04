@@ -272,9 +272,10 @@ func (e *Endpoint) addNewRedirects(selectorPolicy policy.SelectorPolicy, proxyWa
 	)
 
 	// create or update proxy redirects
-	for l4, perSelectorPolicy := range selectorPolicy.RedirectFilters() {
+	for l4, policySelectorTuple := range selectorPolicy.RedirectFilters() {
+
 		// Possible listener name for both the proxy ID and the proxyPolicy below.
-		listener := perSelectorPolicy.GetListener()
+		listener := policySelectorTuple.Policy.GetListener()
 
 		// proxyID() returns also the destination port for the policy,
 		// which may be resolved from a named port

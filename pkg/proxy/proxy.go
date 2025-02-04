@@ -167,12 +167,13 @@ func proxyTypeNotFoundError(proxyType types.ProxyType, listener string, ingress 
 }
 
 func (p *Proxy) UpdateSDP(rules map[identity.NumericIdentity]policy.SelectorPolicy) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
 	if GlobalStandaloneDNSProxy == nil {
 		return
 	}
-	GlobalStandaloneDNSProxy.UpdatePolicyRulesLocked(rules)
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	GlobalStandaloneDNSProxy.UpdatePolicyRulesLocked(rules, true)
 }
 
 func (p *Proxy) createNewRedirect(

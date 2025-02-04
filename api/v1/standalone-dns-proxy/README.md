@@ -103,7 +103,7 @@ FQDN-IP mapping goalstate sent from SDP to agent
 <a name="standalonednsproxy-IdentityToEndpointMapping"></a>
 
 ### IdentityToEndpointMapping
-Cilium Identity ID to IP address mapping
+Cilium Identity ID to Endpoint  mapping
 
 
 | Field | Type | Label | Description |

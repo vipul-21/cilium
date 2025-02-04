@@ -7,11 +7,13 @@ import (
 	"net/netip"
 
 	standalonednsproxy "github.com/cilium/cilium/api/v1/standalone-dns-proxy"
+	"github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/container/versioned"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/identity"
+	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -25,6 +27,7 @@ import (
 
 type updateOnDNSMsgFunc func(lookupTime time.Time, ep *endpoint.Endpoint, qname string, responseIPs []netip.Addr, TTL int, stat *dnsproxy.ProxyRequestContext) error
 
+type EndpointInfo map[uint64][]net.IP
 type FQDNDataServer struct {
 	standalonednsproxy.UnimplementedFQDNDataServer
 
@@ -47,6 +50,12 @@ type FQDNDataServer struct {
 
 	// currentSnapshot is the current state of the DNS rules
 	currentSnapshot map[identity.NumericIdentity]policy.SelectorPolicy
+
+	// identityToIpMutex is a mutex to protect the current state of the identity to Ip mapping
+	identityToIpMutex lock.Mutex
+
+	// currentIdentityToIp is a map of the identity to list of Ips
+	currentIdentityToIp map[identity.NumericIdentity][]net.IP
 }
 
 var (
@@ -92,10 +101,7 @@ func (s *FQDNDataServer) StreamPolicyState(stream standalonednsproxy.FQDNData_St
 		log.Debugf("Sending current state of DNS rules")
 
 		// Send the current state of the DNS rules
-		s.snapshotMutex.Lock()
-		currentSnapshot := s.currentSnapshot
-		s.snapshotMutex.Unlock()
-		if err := s.UpdatePolicyRulesLocked(currentSnapshot); err != nil {
+		if err := s.UpdatePolicyRulesLocked(nil, false); err != nil {
 			log.Errorf("Error sending current state of DNS rules: %v", err)
 			cancel() // Cancel the context to close the stream
 		}
@@ -144,7 +150,7 @@ func (s *FQDNDataServer) ReceiveDNSpolicesACK(stream standalonednsproxy.FQDNData
 				// We can send cancel signal to the channel if the response code is not NO_ERROR,
 				// in that case SDP will recreate the stream.
 				responseCode := update.GetResponse()
-				if responseCode != *standalonednsproxy.ResponseCode_RESPONSE_CODE_NO_ERROR.Enum() {
+				if responseCode != standalonednsproxy.ResponseCode_RESPONSE_CODE_NO_ERROR {
 					log.Errorf("Failed to update DNS policies")
 					cancel, ok := s.streams.Load(stream)
 					if ok {
@@ -164,11 +170,12 @@ func NewServer(endpointManager endpointmanager.EndpointManager, updateOnDNSMsg u
 	ctx := context.Background()
 
 	s := &FQDNDataServer{
-		endpointManager: endpointManager,
-		updateOnDNSMsg:  updateOnDNSMsg,
-		ctx:             ctx,
-		streams:         lock.Map[standalonednsproxy.FQDNData_StreamPolicyStateServer, context.CancelFunc]{},
-		currentSnapshot: make(map[identity.NumericIdentity]policy.SelectorPolicy),
+		endpointManager:     endpointManager,
+		updateOnDNSMsg:      updateOnDNSMsg,
+		ctx:                 ctx,
+		streams:             lock.Map[standalonednsproxy.FQDNData_StreamPolicyStateServer, context.CancelFunc]{},
+		currentSnapshot:     make(map[identity.NumericIdentity]policy.SelectorPolicy),
+		currentIdentityToIp: make(map[identity.NumericIdentity][]net.IP),
 	}
 
 	go func() {
@@ -181,38 +188,103 @@ func NewServer(endpointManager endpointmanager.EndpointManager, updateOnDNSMsg u
 	return s
 }
 
-// UpdatePolicyRulesLocked updates the current state of the DNS rules
-// This method is called when the DNS rules are updated during the endpoint regeneration
-// It also stores the current state of the DNS rules for new clients connecting to the server
-// We send the DNS rules to the client(standalone dns proxy) using the stream
-func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericIdentity]policy.SelectorPolicy) error {
+func convertToBytes(ips []net.IP) [][]byte {
+	var byteIps [][]byte
+	for _, ip := range ips {
+		byteIps = append(byteIps, []byte(ip.String()))
+	}
+	return byteIps
+}
+
+// convertEndpointInfo converts the endpoint info to the format required by the standalone dns proxy
+func (s *FQDNDataServer) convertEndpointInfo(ips []net.IP) []*standalonednsproxy.EndpointInfo {
+	var endpointInfo = make(map[uint64][]net.IP)
+	for _, ip := range ips {
+		var epId uint64
+		ep := s.endpointManager.LookupIP(netip.MustParseAddr(ip.String()))
+		if ep == nil {
+			// If the endpoint is not found, log a warning
+			// This can happen for the endpoints that are not managed by this cilium agent
+			log.Warnf("Endpoint not found for IP: %s", ip)
+		} else {
+			epId = ep.GetID()
+		}
+		endpointInfo[epId] = append(endpointInfo[epId], ip)
+	}
+
+	var convertedEndpointInfo []*standalonednsproxy.EndpointInfo
+	for epId, ips := range endpointInfo {
+		convertedEndpointInfo = append(convertedEndpointInfo, &standalonednsproxy.EndpointInfo{
+			Id: epId,
+			Ip: convertToBytes(ips),
+		})
+	}
+
+	return convertedEndpointInfo
+}
+
+// OnIPIdentityCacheChange is a method to receive the IP identity cache change events
+func (s *FQDNDataServer) OnIPIdentityCacheChange(modType ipcache.CacheModification, cidr types.PrefixCluster, oldHostIP, newHostIP net.IP, oldID *ipcache.Identity, newID ipcache.Identity, encryptKey uint8, k8sMeta *ipcache.K8sMetadata) {
+	s.identityToIpMutex.Lock()
+	switch modType {
+	case ipcache.Upsert:
+		ip := cidr.AsIPNet().IP
+		s.currentIdentityToIp[newID.ID] = append(s.currentIdentityToIp[newID.ID], ip)
+	case ipcache.Delete:
+		if oldID != nil {
+			delete(s.currentIdentityToIp, oldID.ID)
+		}
+	}
+	s.identityToIpMutex.Unlock()
+	err := s.UpdatePolicyRulesLocked(nil, false)
+	if err != nil {
+		log.Errorf("Failed to update DNS rules: %v", err)
+	}
+}
+
+// UpdatePolicyRulesLocked updates the current state of the DNS rules with the given policies and sends the current state of the DNS rules to the client
+// This method is called:
+// 1. when the DNS rules are updated during the endpoint regeneration, we store the state of the DNS rules with flag rulesUpdate as true
+// 2. when the client subscribes to DNS policies, we send the current state of the DNS rules to the client(flag rulesUpdate as false)
+// 3. when the IP identity cache changes, we update the current state of the identity to IP mapping and send the current state of the DNS rules to
+// the client(flag rulesUpdate as false)
+func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericIdentity]policy.SelectorPolicy, rulesUpdate bool) error {
 	s.snapshotMutex.Lock()
 	defer s.snapshotMutex.Unlock()
 
-	s.currentSnapshot = policies
+	// We only update the rules if the rules are updated during the endpoint regeneration
+	if rulesUpdate {
+		s.currentSnapshot = policies
+	}
 
-	egressL7DnsPolicy := make([]*standalonednsproxy.DNSPolicy, 0, len(policies))
-	for identity, pol := range policies {
-		for l4 := range pol.RedirectFilters() {
+	egressL7DnsPolicy := make([]*standalonednsproxy.DNSPolicy, 0, len(s.currentSnapshot))
+	identityToEndpointMapping := make([]*standalonednsproxy.IdentityToEndpointMapping, 0, len(s.currentSnapshot))
+	for identity, pol := range s.currentSnapshot {
+		for l4, polSelTuple := range pol.RedirectFilters() {
 			parseType := l4.GetL7Parser()
 			if parseType == policy.ParserTypeDNS {
-				if l4.PerSelectorPolicies == nil {
-					continue
+				selectorPolicy := polSelTuple.Policy
+				cacheSelector := polSelTuple.Selector
+
+				// Acquire the lock to read the current state of the identity to IP mapping
+				s.identityToIpMutex.Lock()
+				dnsServers := make([]*standalonednsproxy.DNSServer, 0, len(cacheSelector.GetSelections(versioned.Latest())))
+				for _, sel := range cacheSelector.GetSelections(versioned.Latest()) {
+					dnsServers = append(dnsServers, &standalonednsproxy.DNSServer{
+						DnsServerIdentity: sel.Uint32(),
+						DnsServerPort:     uint32(l4.GetPort()),
+						DnsServerProto:    uint32(l4.U8Proto),
+					})
+
+					identityToEndpointMapping = append(identityToEndpointMapping, &standalonednsproxy.IdentityToEndpointMapping{
+						Identity:     sel.Uint32(),
+						EndpointInfo: s.convertEndpointInfo(s.currentIdentityToIp[sel]),
+					})
 				}
-				for cs, sp := range l4.PerSelectorPolicies {
-					if len(sp.DNS) == 0 {
-						continue
-					}
-					dnsServers := make([]*standalonednsproxy.DNSServer, 0, len(cs.GetSelections(versioned.Latest())))
-					for _, sel := range cs.GetSelections(versioned.Latest()) {
-						dnsServers = append(dnsServers, &standalonednsproxy.DNSServer{
-							DnsServerIdentity: uint32(sel),
-							DnsServerPort:     uint32(l4.GetPort()),
-							DnsServerProto:    uint32(l4.U8Proto),
-						})
-					}
-					dnsPattern := make([]string, 0, len(sp.DNS))
-					for _, dns := range sp.DNS {
+				var dnsPattern []string
+				if selectorPolicy != nil && selectorPolicy.DNS != nil {
+					dnsPattern = make([]string, 0, len(selectorPolicy.DNS))
+					for _, dns := range selectorPolicy.DNS {
 						if dns.MatchPattern != "" {
 							dnsPattern = append(dnsPattern, dns.MatchPattern)
 						}
@@ -220,23 +292,29 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericId
 							dnsPattern = append(dnsPattern, dns.MatchName)
 						}
 					}
-					egressL7DnsPolicy = append(egressL7DnsPolicy, &standalonednsproxy.DNSPolicy{
-						SourceIdentity: uint32(identity),
-						DnsServers:     dnsServers,
-						DnsPattern:     dnsPattern,
-					})
 				}
+				egressL7DnsPolicy = append(egressL7DnsPolicy, &standalonednsproxy.DNSPolicy{
+					SourceIdentity: identity.Uint32(),
+					DnsServers:     dnsServers,
+					DnsPattern:     dnsPattern,
+				})
+
+				identityToEndpointMapping = append(identityToEndpointMapping, &standalonednsproxy.IdentityToEndpointMapping{
+					Identity:     identity.Uint32(),
+					EndpointInfo: s.convertEndpointInfo(s.currentIdentityToIp[identity]),
+				})
+				s.identityToIpMutex.Unlock()
 			}
 		}
 	}
 
 	requestId := uuid.New().String()
-	dnsPolices := &standalonednsproxy.PolicyState{
-		RequestId: requestId,
-	}
-
 	log.Debugf("Current EgressL7DnsPolicy: %v for request Id %v", egressL7DnsPolicy, requestId)
-	dnsPolices.EgressL7DnsPolicy = egressL7DnsPolicy
+	dnsPolices := &standalonednsproxy.PolicyState{
+		IdentityToEndpointMapping: identityToEndpointMapping,
+		RequestId:                 requestId,
+		EgressL7DnsPolicy:         egressL7DnsPolicy,
+	}
 
 	log.Debugf("Sending Policy updates to sdp: %v", dnsPolices)
 	s.streams.Range(func(stream standalonednsproxy.FQDNData_StreamPolicyStateServer, cancel context.CancelFunc) bool {
@@ -290,7 +368,6 @@ func (s *FQDNDataServer) UpdateMappingRequest(ctx context.Context, mappings *sta
 	ep := s.endpointManager.LookupIP(endpointAddr)
 	if ep == nil {
 		log.Errorf("endpoint not found for IP: %s", mappings.SourceIp)
-		// return fmt.Errorf("endpoint not found for IP: %s", mappings.ClientIp)
 		return &standalonednsproxy.UpdateMappingResponse{}, fmt.Errorf("endpoint not found for IP: %s", mappings.SourceIp)
 	}
 

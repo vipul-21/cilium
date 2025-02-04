@@ -21,6 +21,7 @@ import (
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
+	"github.com/cilium/cilium/pkg/testutils"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 	testipcache "github.com/cilium/cilium/pkg/testutils/ipcache"
 	testpolicy "github.com/cilium/cilium/pkg/testutils/policy"
@@ -30,6 +31,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
+)
+
+const (
+	dnsServerIdentity = identity.NumericIdentity(2)
+	endpointIdentity  = identity.NumericIdentity(1)
 )
 
 type dummyEpSyncher struct{}
@@ -121,6 +127,12 @@ func server(ctx context.Context) (*FQDNDataServer, standalonednsproxy.FQDNDataCl
 			return errors.New("Failed to update fqdn mapping")
 		},
 	)
+	// Add the identity to ip mapping
+	server.currentIdentityToIp = map[identity.NumericIdentity][]net.IP{
+		endpointIdentity:  {net.ParseIP("1.1.1.1")},
+		dnsServerIdentity: {net.ParseIP("1.1.1.0")},
+	}
+
 	standalonednsproxy.RegisterFQDNDataServer(baseServer, server)
 	go func() {
 		if err := baseServer.Serve(lis); err != nil {
@@ -135,7 +147,6 @@ func server(ctx context.Context) (*FQDNDataServer, standalonednsproxy.FQDNDataCl
 	if err != nil {
 		log.Fatalf("Failed to dial bufnet: %v", err)
 	}
-
 	closer := func() {
 		server.ctx.Done()
 
@@ -151,7 +162,7 @@ func server(ctx context.Context) (*FQDNDataServer, standalonednsproxy.FQDNDataCl
 	return server, client, closer
 }
 
-func TestFQDNMapping(t *testing.T) {
+func TestUpdateMappingRequest(t *testing.T) {
 	ctx := context.Background()
 
 	_, client, closer := server(ctx)
@@ -271,12 +282,7 @@ func (sp *dummySelectorPolicy) DistillPolicy(owner policy.PolicyOwner, redirects
 	return nil
 }
 
-const (
-	dnsServerIdentity = identity.NumericIdentity(2)
-	endpointIdentity  = identity.NumericIdentity(1)
-)
-
-func (sp *dummySelectorPolicy) RedirectFilters() iter.Seq2[*policy.L4Filter, *policy.PerSelectorPolicy] {
+func (sp *dummySelectorPolicy) RedirectFilters() iter.Seq2[*policy.L4Filter, policy.PerSelectorPolicyTuple] {
 	sc := policy.NewSelectorCache(
 		identity.IdentityMap{
 			dnsServerIdentity: labels.LabelArray{
@@ -318,26 +324,18 @@ func (sp *dummySelectorPolicy) RedirectFilters() iter.Seq2[*policy.L4Filter, *po
 			L7Parser: policy.ParserTypeDNS,
 			Ingress:  false,
 		},
-		"ANY/UDP": {
-			Port:     0,
-			Protocol: api.ProtoAny,
-			U8Proto:  0x00,
-			L7Parser: policy.ParserTypeDNS,
-			Ingress:  false,
-			PerSelectorPolicies: policy.L7DataMap{
-				cachedSelector: &policy.PerSelectorPolicy{
-					L7Rules: api.L7Rules{
-						DNS: []api.PortRuleDNS{},
-					},
-				},
-			},
-		},
 	})
 
 	// return the expected policy
-	return func(yield func(*policy.L4Filter, *policy.PerSelectorPolicy) bool) {
+	return func(yield func(*policy.L4Filter, policy.PerSelectorPolicyTuple) bool) {
 		expectedPolicy.ForEach(func(l4 *policy.L4Filter) bool {
-			return yield(l4, nil)
+			for cs, perSelectorPolicy := range l4.PerSelectorPolicies {
+				return yield(l4, policy.PerSelectorPolicyTuple{
+					Policy:   perSelectorPolicy,
+					Selector: cs,
+				})
+			}
+			return true
 		})
 	}
 }
@@ -375,6 +373,25 @@ func TestSuccessfullyStreamPolicyState(t *testing.T) {
 						},
 					},
 					RequestId: "1",
+					IdentityToEndpointMapping: []*standalonednsproxy.IdentityToEndpointMapping{
+						{
+							Identity: 2,
+							EndpointInfo: []*standalonednsproxy.EndpointInfo{
+								{
+									Ip: [][]byte{[]byte("1.1.1.0")},
+								},
+							},
+						},
+						{
+							Identity: 1,
+							EndpointInfo: []*standalonednsproxy.EndpointInfo{
+								{
+									Ip: [][]byte{[]byte("1.1.1.1")},
+									Id: 1,
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -396,44 +413,52 @@ func TestSuccessfullyStreamPolicyState(t *testing.T) {
 			require.NoError(t, err)
 
 			// Server sends the DNS rules
-			for {
-				actualOut, err := outClient.Recv()
-				require.NoError(t, err)
-				require.Equal(t, len(test.in.policyRules.GetEgressL7DnsPolicy()), len(actualOut.GetEgressL7DnsPolicy()))
+			actualOut, err := outClient.Recv()
+			require.NoError(t, err)
+			require.Equal(t, len(test.in.policyRules.GetEgressL7DnsPolicy()), len(actualOut.GetEgressL7DnsPolicy()))
 
-				for i, expectedPolicy := range test.in.policyRules.GetEgressL7DnsPolicy() {
-					actualPolicy := actualOut.GetEgressL7DnsPolicy()[i]
-					require.Equal(t, expectedPolicy.GetSourceIdentity(), actualPolicy.GetSourceIdentity())
-					require.Equal(t, expectedPolicy.GetDnsPattern(), actualPolicy.GetDnsPattern())
-					require.Equal(t, len(expectedPolicy.GetDnsServers()), len(actualPolicy.GetDnsServers()))
-					for j, expectedServer := range expectedPolicy.GetDnsServers() {
-						actualServer := actualPolicy.GetDnsServers()[j]
-						require.Equal(t, expectedServer.GetDnsServerPort(), actualServer.GetDnsServerPort())
-						require.Equal(t, expectedServer.GetDnsServerProto(), actualServer.GetDnsServerProto())
-					}
+			for i, expectedPolicy := range test.in.policyRules.GetEgressL7DnsPolicy() {
+				actualPolicy := actualOut.GetEgressL7DnsPolicy()[i]
+				require.Equal(t, expectedPolicy.GetSourceIdentity(), actualPolicy.GetSourceIdentity())
+				require.Equal(t, expectedPolicy.GetDnsPattern(), actualPolicy.GetDnsPattern())
+				require.Equal(t, len(expectedPolicy.GetDnsServers()), len(actualPolicy.GetDnsServers()))
+				for j, expectedServer := range expectedPolicy.GetDnsServers() {
+					actualServer := actualPolicy.GetDnsServers()[j]
+					require.Equal(t, expectedServer.GetDnsServerPort(), actualServer.GetDnsServerPort())
+					require.Equal(t, expectedServer.GetDnsServerProto(), actualServer.GetDnsServerProto())
 				}
-
-				err = outClient.Send(&standalonednsproxy.PolicyStateResponse{
-					Response:  standalonednsproxy.ResponseCode_RESPONSE_CODE_NO_ERROR,
-					RequestId: actualOut.RequestId,
-				})
-				require.NoError(t, err)
-
-				_, val := server.dnsMappingResult.Load(actualOut.RequestId)
-				require.Equal(t, val, true)
-
-				// Client closes the connection
-				err = outClient.CloseSend()
-				require.NoError(t, err)
-
-				// Wait for a second before checking if the server has received the close signal
-				sleepTime := time.NewTimer(1 * time.Second)
-				<-sleepTime.C
-				// Server receives the close signal and deletes the mapping
-				_, val = server.dnsMappingResult.Load(actualOut.RequestId)
-				require.False(t, val)
-				break
 			}
+
+			for i, expectedMapping := range test.in.policyRules.GetIdentityToEndpointMapping() {
+				actualMapping := actualOut.GetIdentityToEndpointMapping()[i]
+				require.Equal(t, expectedMapping.GetIdentity(), actualMapping.GetIdentity())
+				require.Equal(t, len(expectedMapping.GetEndpointInfo()), len(actualMapping.GetEndpointInfo()))
+				for j, expectedInfo := range expectedMapping.GetEndpointInfo() {
+					actualInfo := actualMapping.GetEndpointInfo()[j]
+					require.Equal(t, expectedInfo.GetIp(), actualInfo.GetIp())
+					require.Equal(t, expectedInfo.GetId(), actualInfo.GetId())
+				}
+			}
+
+			err = outClient.Send(&standalonednsproxy.PolicyStateResponse{
+				Response:  standalonednsproxy.ResponseCode_RESPONSE_CODE_NO_ERROR,
+				RequestId: actualOut.RequestId,
+			})
+			require.NoError(t, err)
+
+			_, val := server.dnsMappingResult.Load(actualOut.RequestId)
+			require.Equal(t, val, true)
+
+			// Client closes the connection
+			err = outClient.CloseSend()
+			require.NoError(t, err)
+
+			// Wait for a second before checking if the server has received the close signal
+			sleepTime := time.NewTimer(1 * time.Second)
+			<-sleepTime.C
+			// Server receives the close signal and deletes the mapping
+			_, val = server.dnsMappingResult.Load(actualOut.RequestId)
+			require.False(t, val)
 		})
 	}
 }
@@ -457,6 +482,7 @@ func TestFailureToStreamPolicyState(t *testing.T) {
 		}
 		require.NoError(t, err)
 
+		// Client sends a failure response
 		err = outClient.Send(&standalonednsproxy.PolicyStateResponse{
 			Response:  standalonednsproxy.ResponseCode_RESPONSE_CODE_SERVER_FAILURE,
 			RequestId: actualOut.RequestId,
@@ -469,6 +495,8 @@ func TestFailureToStreamPolicyState(t *testing.T) {
 }
 
 func TestRunServer(t *testing.T) {
+	testutils.PrivilegedTest(t)
+
 	test := map[string]struct {
 		port   int
 		server *FQDNDataServer

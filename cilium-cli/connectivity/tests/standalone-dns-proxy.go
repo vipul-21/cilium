@@ -29,10 +29,8 @@ func (s *standaloneDNSProxy) Run(ctx context.Context, t *check.Test) {
 	ct := t.Context()
 
 	for _, client := range ct.ClientPods() {
-		// nslookup
-		t.NewAction(s, fmt.Sprintf("dig-%s", extTarget), &client, http, features.IPFamilyV4).Run(func(a *check.Action) {
-			a.ExecInPod(ctx, ct.NSLookupCommandService(http, features.IPFamilyAny))
+		t.NewAction(s, fmt.Sprintf("nsLookUp-%s", extTarget), &client, http, features.IPFamilyV4).Run(func(a *check.Action) {
+			a.ExecInPod(ctx, ct.NSLookupCommandService(http, features.IPFamilyV4))
 		})
-
 	}
 }

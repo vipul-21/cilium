@@ -112,7 +112,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 		// There is an assumption here that the Standalone DNS proxy will be listening on the ToFQDNsProxyPort.
 		// It will be hard fail if the standalone DNS proxy is not enabled.
 		if option.Config.DisableEmbeddedDNSProxy {
-			if option.Config.EnableStandaloneDNSProxy {
+			if option.Config.EnableStandaloneDNSProxy && option.Config.ToFQDNsProxyPort != 0 {
 				assignedPort = uint16(option.Config.ToFQDNsProxyPort)
 			} else {
 				log.Fatalf("Need atleast one of the dns proxy running. Embedded DNS proxy is disabled and Standalone DNS proxy is not enabled.")
@@ -420,6 +420,9 @@ func (d *Daemon) updateOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, qna
 func (d *Daemon) bootstrapStandaloneDNSProxyServer() {
 	sdpServer := service.NewServer(d.endpointManager, d.updateOnDNSMsg)
 	proxy.GlobalStandaloneDNSProxy = sdpServer
+
+	// Add the Standalone DNS Proxy as a listener to the IPCache
+	d.ipcache.AddListener(sdpServer)
 
 	go service.RunServer(option.Config.ToFqdnsServerPort, sdpServer)
 }

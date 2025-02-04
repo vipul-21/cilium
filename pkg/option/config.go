@@ -3108,12 +3108,6 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.ClockSource = ClockSourceKtime
 	c.EnableIdentityMark = vp.GetBool(EnableIdentityMark)
 
-	if c.EnableStandaloneDNSProxy {
-		if !c.EnableL7Proxy {
-			log.Fatalf("Standalone DNS proxy requires L7 proxy to be enabled")
-		}
-	}
-
 	if c.DisableEmbeddedDNSProxy && !c.EnableL7Proxy {
 		log.Warn("L7 proxy is not enabled. Disabling embedded DNS proxy has no effect")
 	}
@@ -3149,6 +3143,16 @@ func (c *DaemonConfig) Populate(vp *viper.Viper) {
 	c.DNSProxyLockTimeout = vp.GetDuration(DNSProxyLockTimeout)
 	c.DNSProxySocketLingerTimeout = vp.GetInt(DNSProxySocketLingerTimeout)
 	c.FQDNRejectResponse = vp.GetString(FQDNRejectResponseCode)
+
+	if c.EnableStandaloneDNSProxy {
+		if !c.EnableL7Proxy {
+			log.Fatalf("Standalone DNS proxy requires L7 proxy to be enabled")
+		}
+
+		if c.ToFQDNsProxyPort == 0 {
+			log.Fatalf("Standalone DNS proxy requires a valid port number to be set")
+		}
+	}
 
 	// Convert IP strings into net.IPNet types
 	subnets, invalid := ip.ParseCIDRs(vp.GetStringSlice(IPv4PodSubnets))

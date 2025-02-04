@@ -30,6 +30,9 @@ var (
 	//go:embed manifests/client-egress-only-dns.yaml
 	clientEgressOnlyDNSPolicyYAML string
 
+	//go:embed manifests/client-egress-standalone-dns-proxy.yaml
+	clientEgressStandaloneDNSProxyYAML string
+
 	//go:embed manifests/client-egress-to-fqdns.yaml
 	clientEgressToFQDNsPolicyYAML string
 
@@ -325,6 +328,7 @@ func renderTemplates(clusterName string, param check.Parameters) (map[string]str
 		"clientEgressL7HTTPExternalYAML":                     clientEgressL7HTTPExternalYAML,
 		"clientEgressNodeLocalDNSYAML":                       clientEgressNodeLocalDNSYAML,
 		"clientEgressOnlyDNSPolicyYAML":                      clientEgressOnlyDNSPolicyYAML,
+		"clientEgressStandaloneDNSProxyYAML":                 clientEgressStandaloneDNSProxyYAML,
 		"echoIngressFromCIDRYAML":                            echoIngressFromCIDRYAML,
 		"denyCIDRPolicyYAML":                                 denyCIDRPolicyYAML,
 	}

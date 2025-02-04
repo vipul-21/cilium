@@ -19,28 +19,22 @@ metadata:
     {{- end }}
 spec:
   minReadySeconds: 5
-  updateStrategy:
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 2
-    type: RollingUpdate
+  # updateStrategy:
+  #   rollingUpdate:
+  #     maxUnavailable: 0
+  #     maxSurge: 2
+  #   type: RollingUpdate
   selector:
     matchLabels:
       k8s-app: standalone-dns-proxy
-  # {{- with .Values.standaloneDnsProxy.updateStrategy }}
-  # updateStrategy:
-  #   {{- toYaml . | trim | nindent 4 }}
-  # {{- end }}
+  {{- with .Values.standaloneDnsProxy.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | trim | nindent 4 }}
+  {{- end }}
   template:
     metadata:
       annotations:
-        # {{- if and (.Values.envoy.rollOutPods) (not .Values.envoy.bootstrapConfigMap) }}
-        # ensure pods roll when configmap updates
         cilium.io/standalone-dns-proxy-configmap-checksum: {{ include (print $.Template.BasePath "/standalone-dns-proxy/configmap.yaml") . | sha256sum | quote }}
-        # {{- end }}
-        # Set app AppArmor's profile to "unconfined". The value of this annotation
-        # can be modified as long users know which profiles they have available
-        # in AppArmor.
         container.apparmor.security.beta.kubernetes.io/standalone-dns-proxy: "unconfined"
       labels:
         k8s-app: standalone-dns-proxy
@@ -52,42 +46,41 @@ spec:
         {{- end }}
     spec:
       hostNetwork: true
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ .Values.standaloneDnsProxy.automountServiceAccountToken }}
+      # nodeSelector:
+      #   kubernetes.io/os: linux
+      {{- with .Values.standaloneDnsProxy.nodeSelector }}
       nodeSelector:
-        kubernetes.io/os: linux
-      # affinity:
-      #   nodeAffinity:
-      #     requiredDuringSchedulingIgnoredDuringExecution:
-      #       nodeSelectorTerms:
-      #         - matchExpressions:
-      #             - key: kubernetes.io/os
-      #               operator: In
-      #               values:
-      #                 - linux
+        {{- toYaml . | trim | nindent 8 }}
+      {{- end }}
+      # tolerations:
+      #   - key: CriticalAddonsOnly
+      #     operator: Exists
+      #   - operator: "Exists"
+      #     effect: NoExecute
+      #   - operator: "Exists"
+      #     effect: NoSchedule
+      {{- with .Values.standaloneDnsProxy.tolerations }}
       tolerations:
-        - key: CriticalAddonsOnly
-          operator: Exists
-        - operator: "Exists"
-          effect: NoExecute
-        - operator: "Exists"
-          effect: NoSchedule
+        {{- toYaml . | trim | nindent 8 }}
+      {{- end }}
       containers:
         - name: standalone-dns-proxy
-          image: {{ .Values.standaloneDnsProxy.image | quote }}
+          image: {{ include "cilium.image" .Values.standaloneDnsProxy.image | quote }}
           args:
           - --config-dir=/tmp/standalone-dns-proxy/config-map
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ .Values.standaloneDnsProxy.image.pullPolicy }}
           livenessProbe:
             tcpSocket:
               host: "127.0.0.1"
-              port: 40046
+              port: {{ .Values.standaloneDnsProxy.proxyPort }}
             periodSeconds: 30
             successThreshold: 1
             failureThreshold: 3
           readinessProbe:
             tcpSocket:
               host: "127.0.0.1"
-              port: 40046
+              port: {{ .Values.standaloneDnsProxy.proxyPort }}
             periodSeconds: 30
             successThreshold: 1
             failureThreshold: 3
@@ -98,19 +91,14 @@ spec:
             readOnly: true
           - mountPath: /var/run/cilium
             name: cilium-run
-          - name: bpf-maps
-            mountPath: /sys/fs/bpf
           securityContext:
             capabilities:
-              add: ["BPF", "NET_ADMIN", "NET_RAW"]
+              add: ["NET_ADMIN", "NET_RAW"]
               drop: ["ALL"]
       volumes:
       - name: cilium-run
         hostPath:
           path: /var/run/cilium
-      - name: bpf-maps
-        hostPath:
-          path: /sys/fs/bpf
       - configMap:
           defaultMode: 420
           name: standalone-dns-proxy-config

@@ -78,7 +78,7 @@ message PolicyState {
     repeated IdentityToEndpointMapping identity_to_endpoint_mapping = 3; // Identity to Endpoint mapping for the DNS server and the source identity
 }
 
-// Cilium Identity ID to IP address mapping
+// Cilium Identity ID to Endpoint  mapping
 message IdentityToEndpointMapping {
     uint32 identity = 1;
     repeated EndpointInfo endpoint_info = 2;

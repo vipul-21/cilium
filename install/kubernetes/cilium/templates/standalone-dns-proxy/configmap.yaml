@@ -16,10 +16,10 @@ metadata:
   {{- end }}
 data:
   config.yaml: |
-    enable-l7-proxy: "false"
-    debug: "false"
+    enable-l7-proxy: {{ .Values.standaloneDnsProxy.l7Proxy.enabled | quote }}
+    debug: {{ .Values.standaloneDnsProxy.debug.enabled | quote }}
     enable-ipv4: "true"
-    tofqdns-proxy-port: "40046"
-    tofqdns-server-port: "40045"
-    tofqdns-enable-dns-compression: "true"
+    tofqdns-proxy-port: {{ .Values.standaloneDnsProxy.proxyPort | quote }}
+    tofqdns-server-port: {{ .Values.standaloneDnsProxy.serverPort | quote }}
+    tofqdns-enable-dns-compression: {{ .Values.standaloneDnsProxy.enableDnsCompression | quote }}
 {{- end }}

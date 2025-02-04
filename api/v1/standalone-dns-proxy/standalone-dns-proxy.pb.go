@@ -450,7 +450,7 @@ func (x *PolicyState) GetIdentityToEndpointMapping() []*IdentityToEndpointMappin
 	return nil
 }
 
-// Cilium Identity ID to IP address mapping
+// Cilium Identity ID to Endpoint  mapping
 type IdentityToEndpointMapping struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Identity      uint32                 `protobuf:"varint,1,opt,name=identity,proto3" json:"identity,omitempty"`
