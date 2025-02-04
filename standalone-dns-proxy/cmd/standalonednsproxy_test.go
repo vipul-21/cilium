@@ -3,25 +3,22 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"net/netip"
 	"testing"
 	"time"
 
 	standalonednsproxy "github.com/cilium/cilium/api/v1/standalone-dns-proxy"
-	"github.com/cilium/cilium/pkg/bpf"
-	"github.com/cilium/cilium/pkg/ebpf"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
+	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
-	ipcachePkg "github.com/cilium/cilium/pkg/ipcache"
-	"github.com/cilium/cilium/pkg/maps/ipcache"
+	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/trigger"
+	"github.com/cilium/cilium/pkg/u8proto"
 	"github.com/cilium/dns"
-	"github.com/cilium/ebpf/rlimit"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -136,24 +133,22 @@ func (m *MockFQDNDataServer) UpdateMappingRequest(ctx context.Context, in *stand
 	}, nil
 }
 
-// create a channel to receive the DNS rules
+// create a channel to receive the policy state
 var dnsPoliciesResult = make(chan *standalonednsproxy.PolicyStateResponse)
 
 func (m *MockFQDNDataServer) StreamPolicyState(stream standalonednsproxy.FQDNData_StreamPolicyStateServer) error {
-	//Send the current state of the DNS rules
+	//Receive the success message from the SDP
 	go func() {
 		res, err := stream.Recv()
 		if err != nil {
-			log.Errorf("Error receiving DNS rules: %v", err)
+			log.Errorf("Error receiving policy state response: %v", err)
 		}
-		fmt.Printf("Received DNS rules: %v", res)
 		dnsPoliciesResult <- res
-		fmt.Printf("Sent DNS rules: %v", res)
 		// Send the close message
 		stream.Context().Done()
 	}()
 	go func() {
-		// Send the current state of the DNS rules
+		// Send the current state of the policy state
 		err := stream.Send(&standalonednsproxy.PolicyState{
 			EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
 				{
@@ -169,13 +164,33 @@ func (m *MockFQDNDataServer) StreamPolicyState(stream standalonednsproxy.FQDNDat
 				},
 			},
 			RequestId: "1",
+			IdentityToEndpointMapping: []*standalonednsproxy.IdentityToEndpointMapping{
+				{
+					Identity: 1,
+					EndpointInfo: []*standalonednsproxy.EndpointInfo{
+						{
+							Ip: [][]byte{[]byte(net.ParseIP("1.1.1.0").String())},
+							Id: 100,
+						},
+					},
+				},
+				{
+					Identity: 2,
+					EndpointInfo: []*standalonednsproxy.EndpointInfo{
+						{
+							Ip: [][]byte{[]byte(net.ParseIP("1.1.1.1").String())},
+							Id: 101,
+						},
+					},
+				},
+			},
 		})
 		if err != nil {
-			log.Errorf("Error sending DNS rules: %v", err)
+			log.Errorf("Error sending policy state: %v", err)
 		}
 	}()
 
-	log.Debugf("SubscribeToDNSPolicies waiting for context to be done")
+	log.Debugf("StreamPolicyState waiting for context to be done")
 	<-stream.Context().Done()
 	log.Info("Closing the stream")
 	return stream.Context().Err()
@@ -232,7 +247,7 @@ func setupStandaloneDNSProxy(t *testing.T, ctx context.Context) (*StandaloneDNSP
 	return sdp, closer
 }
 
-func TestSubscribeToDNSRules(t *testing.T) {
+func TestSubscribeToPolicyState(t *testing.T) {
 	testutils.PrivilegedTest(t)
 
 	sdp, closer := setupStandaloneDNSProxy(t, context.Background())
@@ -255,8 +270,8 @@ func TestSubscribeToDNSRules(t *testing.T) {
 			return &endpoint.Endpoint{}, false, nil
 		},
 		// LookupSecIDByIP
-		func(ip netip.Addr) (ipcachePkg.Identity, bool) {
-			return ipcachePkg.Identity{}, false
+		func(ip netip.Addr) (ipcache.Identity, bool) {
+			return ipcache.Identity{}, false
 		},
 		// LookupIPsBySecID
 		func(nid identity.NumericIdentity) []string {
@@ -268,20 +283,28 @@ func TestSubscribeToDNSRules(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	// SubscribeToDNSRules is called successfully
+
+	// StreamPolicyState is called successfully
 	go func() {
 		context, cancel := context.WithCancel(context.Background())
 		sdp.cancelStreamPolicyStateStream = cancel
 		err = sdp.streamPolicyState(context)
 		require.Contains(t, err.Error(), "rpc error: code = Canceled desc = grpc: the client connection is closing")
 	}()
+
 	// check if the server received the success or not
 	result := <-dnsPoliciesResult
 	require.Equal(t, result.GetResponse(), standalonednsproxy.ResponseCode_RESPONSE_CODE_NO_ERROR)
+	// Check the data sent from the server is added
+	require.Equal(t, map[string]uint64{"1.1.1.1": 101, "1.1.1.0": 100}, sdp.ipToEndpointIdCache)
+	require.Equal(t, map[string]uint32{"1.1.1.1": 2, "1.1.1.0": 1}, sdp.ipToIdentityCache)
 
 	// // check the dnsResult channel is empty
 	select {
 	case <-dnsPoliciesResult:
+		for _, s := range sdp.DNSProxy.DNSServers {
+			s.Shutdown()
+		}
 		t.Fatalf("dnsPoliciesResult channel is not empty")
 	default:
 		log.Info("dnsPoliciesResult channel is empty")
@@ -299,7 +322,7 @@ func TestCreateClientIsCreatedSuccessfully(t *testing.T) {
 	// check if the client is created
 	require.NotNil(t, sdp.Client)
 	// Check if dns rules stream is created
-	require.NotNil(t, sdp.dnsRulesStream)
+	require.NotNil(t, sdp.policyStateStream)
 }
 
 func TestCreateClientFails(t *testing.T) {
@@ -367,14 +390,14 @@ func TestCreateSubscriptionStream(t *testing.T) {
 
 	err = sdp.createStreamPolicyStateStream(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, sdp.dnsRulesStream)
+	require.NotNil(t, sdp.policyStateStream)
 
 	// Now check if the subscription stream is created again if the dnsRulesStream is not nil
-	current := sdp.dnsRulesStream
+	current := sdp.policyStateStream
 	err = sdp.createStreamPolicyStateStream(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, sdp.dnsRulesStream)
-	require.NotEqual(t, current, sdp.dnsRulesStream)
+	require.NotNil(t, sdp.policyStateStream)
+	require.NotEqual(t, current, sdp.policyStateStream)
 
 	// Now check if the subscription stream is not created if the client is nil
 	sdp.Client = nil
@@ -382,61 +405,29 @@ func TestCreateSubscriptionStream(t *testing.T) {
 	require.Error(t, err)
 }
 
-func setupMapForTest(t *testing.T) *bpf.Map {
-	testutils.PrivilegedTest(t)
-
-	bpf.CheckOrMountFS("")
-
-	err := rlimit.RemoveMemlock()
-	require.NoError(t, err)
-
-	testMap := bpf.NewMap(
-		ipcache.Name,
-		ebpf.LPMTrie,
-		&ipcache.Key{},
-		&ipcache.RemoteEndpointInfo{},
-		10,
-		bpf.BPF_F_NO_PREALLOC)
-
-	err = testMap.OpenOrCreate()
-	require.NoError(t, err, "Failed to create map")
-
-	// Add the key to the map
-	mask := net.CIDRMask(32, 32)
-	key := ipcache.NewKey(net.ParseIP("1.1.1.10"), mask, 0)
-	err = testMap.Update(&key, &ipcache.RemoteEndpointInfo{
-		SecurityIdentity: uint32(1),
-	})
-	require.NoError(t, err)
-	var s map[string][]string = make(map[string][]string)
-	testMap.Dump(s)
-	fmt.Printf("map: %v\n", s)
-	t.Cleanup(func() {
-		require.NoError(t, testMap.Close())
-	})
-
-	return testMap
-}
+var (
+	ipToEndpointIdCache = map[string]uint64{"1.1.1.10": 1}
+	ipToIdentityCache   = map[string]uint32{"1.1.1.10": 100}
+)
 
 func TestLookupSecIDByIP(t *testing.T) {
 	ctx := context.Background()
 	sdp, closer := setupStandaloneDNSProxy(t, ctx)
 	defer closer()
 
-	setupMapForTest(t)
-
+	sdp.ipToIdentityCache = ipToIdentityCache
 	// Case 1: LookupSecIDByIP is called successfully
 	secID, found := sdp.LookupSecIDByIP(netip.MustParseAddr("1.1.1.10"))
 	require.True(t, found)
-	require.Equal(t, ipcachePkg.Identity{
-		ID:     identity.NumericIdentity(1),
+	require.Equal(t, ipcache.Identity{
+		ID:     identity.NumericIdentity(100),
 		Source: source.Local,
 	}, secID)
 
 	// Case 2: LookupSecIDByIP is called with invalid ip
 	secID, found = sdp.LookupSecIDByIP(netip.MustParseAddr("2.2.2.2"))
 	require.False(t, found)
-	require.Equal(t, ipcachePkg.Identity{}, secID)
+	require.Equal(t, ipcache.Identity{}, secID)
 }
 
 func TestLookEPByIP(t *testing.T) {
@@ -444,16 +435,229 @@ func TestLookEPByIP(t *testing.T) {
 	sdp, closer := setupStandaloneDNSProxy(t, ctx)
 	defer closer()
 
-	setupMapForTest(t)
-
+	sdp.ipToEndpointIdCache = ipToEndpointIdCache
+	sdp.ipToIdentityCache = ipToIdentityCache
 	// Case 1: LookupEPByIP is called successfully
 	ep, _, err := sdp.LookupEPByIP(netip.MustParseAddr("1.1.1.10"))
 	require.NoError(t, err)
 	require.NotNil(t, ep)
-	require.Equal(t, identity.NumericIdentity(1), ep.SecurityIdentity.ID)
+	require.Equal(t, uint64(1), ep.GetID())
+	require.Equal(t, identity.NumericIdentity(100), ep.SecurityIdentity.ID)
 
 	// Case 2: LookupEPByIP is called with invalid ip
 	ep, _, err = sdp.LookupEPByIP(netip.MustParseAddr("2.2.2.2"))
 	require.Error(t, err)
 	require.Nil(t, ep)
+}
+
+func TestUpdatePolicyState(t *testing.T) {
+	testutils.PrivilegedTest(t)
+
+	ctx := context.Background()
+	sdp, closer := setupStandaloneDNSProxy(t, ctx)
+	defer closer()
+
+	dnsProxyConfig := dnsproxy.DNSProxyConfig{
+		Address:                "",
+		Port:                   1234,
+		IPv4:                   true,
+		IPv6:                   true,
+		EnableDNSCompression:   true,
+		MaxRestoreDNSIPs:       10,
+		ConcurrencyLimit:       10,
+		ConcurrencyGracePeriod: 10,
+		DNSProxyType:           dnsproxy.StandaloneDNSProxy,
+	}
+	epId := uint64(100)
+	dnsServerIps := []net.IP{
+		net.ParseIP("2.2.2.2"),
+	}
+	var dnsIps [][]byte
+	for _, i := range dnsServerIps {
+		dnsIps = append(dnsIps, []byte(i.String()))
+	}
+
+	epIps := []net.IP{
+		net.ParseIP("1.1.1.1"),
+	}
+	var ips [][]byte
+	for _, i := range epIps {
+		ips = append(ips, []byte(i.String()))
+	}
+
+	dstPortProto := restore.MakeV2PortProto(53, u8proto.UDP) // Set below when we setup the server!
+	IdentityToEndpointMapping := []*standalonednsproxy.IdentityToEndpointMapping{
+		{
+			Identity: 2,
+			EndpointInfo: []*standalonednsproxy.EndpointInfo{
+				{
+					Ip: dnsIps,
+					Id: 101,
+				},
+			},
+		},
+		{
+			Identity: 3,
+			EndpointInfo: []*standalonednsproxy.EndpointInfo{
+				{
+					Ip: dnsIps,
+					Id: 102,
+				},
+			},
+		},
+		{
+			Identity: 1,
+			EndpointInfo: []*standalonednsproxy.EndpointInfo{
+				{
+					Ip: ips,
+					Id: 100,
+				},
+			},
+		},
+	}
+	var test = []struct {
+		name string
+		args *standalonednsproxy.PolicyState
+		err  error
+		out  map[restore.PortProto][]identity.NumericIdentitySlice
+	}{
+		{
+			name: "Single DNS Policy with single DNS server",
+			args: &standalonednsproxy.PolicyState{
+				EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
+					{
+						SourceIdentity: 1,
+						DnsPattern:     []string{"*.cilium.io", "example.com"},
+						DnsServers: []*standalonednsproxy.DNSServer{
+							{
+								DnsServerIdentity: 2,
+								DnsServerPort:     53,
+								DnsServerProto:    17,
+							},
+						},
+					},
+				},
+				IdentityToEndpointMapping: IdentityToEndpointMapping,
+			},
+			err: nil,
+			out: map[restore.PortProto][]identity.NumericIdentitySlice{
+				dstPortProto: {
+					{identity.NumericIdentity(2)},
+				},
+			},
+		},
+		{
+			name: "Single DNS Policy with multiple port and protocol DNS servers",
+			args: &standalonednsproxy.PolicyState{
+				EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
+					{
+						SourceIdentity: 1,
+						DnsPattern:     []string{"*.cilium.io", "example.com"},
+						DnsServers: []*standalonednsproxy.DNSServer{
+							{
+								DnsServerIdentity: 2,
+								DnsServerPort:     53,
+								DnsServerProto:    17,
+							},
+							{
+								DnsServerIdentity: 3,
+								DnsServerPort:     53,
+								DnsServerProto:    17,
+							},
+						},
+					},
+				},
+				IdentityToEndpointMapping: IdentityToEndpointMapping,
+			},
+			err: nil,
+			out: map[restore.PortProto][]identity.NumericIdentitySlice{
+				dstPortProto: {
+					{identity.NumericIdentity(2), identity.NumericIdentity(3)},
+				},
+			},
+		},
+		{
+			name: "Multiple DNS Policies with same identity",
+			args: &standalonednsproxy.PolicyState{
+				EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
+					{
+						SourceIdentity: 1,
+						DnsPattern:     []string{"*.aws.io"},
+						DnsServers: []*standalonednsproxy.DNSServer{
+							{
+								DnsServerIdentity: 2,
+								DnsServerPort:     53,
+								DnsServerProto:    17,
+							},
+						},
+					},
+					{
+						SourceIdentity: 1,
+						DnsPattern:     []string{"*.cilium.io", "example.com"},
+						DnsServers: []*standalonednsproxy.DNSServer{
+							{
+								DnsServerIdentity: 3,
+								DnsServerPort:     53,
+								DnsServerProto:    17,
+							},
+						},
+					},
+				},
+				IdentityToEndpointMapping: IdentityToEndpointMapping,
+			},
+			err: nil,
+			out: map[restore.PortProto][]identity.NumericIdentitySlice{
+				dstPortProto: {
+					{identity.NumericIdentity(2)},
+					{identity.NumericIdentity(3)},
+				},
+			},
+		},
+	}
+
+	for _, tt := range test {
+		t.Run(tt.name, func(t *testing.T) {
+			proxy, err := dnsproxy.StartDNSProxy(dnsProxyConfig, // any address, any port, enable ipv4, enable ipv6, enable compression, max 1000 restore IPs
+				// LookupEPByIP
+				func(ip netip.Addr) (*endpoint.Endpoint, bool, error) {
+					return &endpoint.Endpoint{}, false, nil
+				},
+				// LookupSecIDByIP
+				func(ip netip.Addr) (ipcache.Identity, bool) {
+					return ipcache.Identity{}, false
+				},
+				// LookupIPsBySecID
+				func(nid identity.NumericIdentity) []string {
+					return []string{}
+				},
+				// NotifyOnDNSMsg
+				func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, dstAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
+					return nil
+				},
+			)
+			require.NoError(t, err, "error starting DNS Proxy")
+			sdp.DNSProxy = proxy
+
+			_, err = sdp.UpdatePolicyState(tt.args)
+			if err != nil {
+				require.Equal(t, tt.err, err)
+				return
+			}
+			require.Nil(t, err)
+
+			allowedRules, err := sdp.DNSProxy.GetAllowedRulesForEndpoint(epId)
+			require.NoError(t, err)
+			// Compare the allowed rules with the expected output
+			for portProto, expectedSelectors := range tt.out {
+				actualSelectors, ok := allowedRules[portProto]
+				require.True(t, ok)
+				require.Equal(t, len(expectedSelectors), len(actualSelectors))
+			}
+
+			// Shutdown the DNS Proxy
+			for _, s := range sdp.DNSProxy.DNSServers {
+				s.Shutdown()
+			}
+		})
+	}
 }

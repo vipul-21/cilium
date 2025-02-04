@@ -67,7 +67,7 @@ message DNSServer {
 message DNSPolicy {
     uint32 source_identity = 1;  // Identity of the workload this L7 DNS policy should apply to
     repeated string dns_pattern = 2;  // Allowed DNS pattern this identity is allowed to resolve.
-    repeated DNSServer dns_servers = 3; // List of DNS servers to be allowed to
+    repeated DNSServer dns_servers = 3; // List of DNS servers to be allowed to connect.
 }
 
 // L7 DNS policy snapshot of all local endpoints and identity to ip mapping of source 
@@ -75,11 +75,17 @@ message DNSPolicy {
 message PolicyState {
     repeated DNSPolicy egress_l7_dns_policy = 1;
     string request_id = 2; // Random UUID based identifier which will be referenced in ACKs
-    repeated IdentityToIPMapping identity_to_ip_mapping = 3; // Identity to IP mapping for the DNS server and the source identity
+    repeated IdentityToEndpointMapping identity_to_endpoint_mapping = 3; // Identity to Endpoint mapping for the DNS server and the source identity
 }
 
-// Cilium Identity ID to IP address mapping
-message IdentityToIPMapping {
+// Cilium Identity ID to Endpoint  mapping
+message IdentityToEndpointMapping {
     uint32 identity = 1;
+    repeated EndpointInfo endpoint_info = 2;
+}
+
+// cilium endpoint ipaddress and ID
+message EndpointInfo {
+    uint64 id = 1;
     repeated bytes ip = 2;
 }

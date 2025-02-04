@@ -10,7 +10,6 @@ import (
 
 	standalonednsproxy "github.com/cilium/cilium/api/v1/standalone-dns-proxy"
 
-	"github.com/cilium/cilium/standalone-dns-proxy/pkg/maps"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
@@ -18,12 +17,16 @@ import (
 
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
+	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/lock"
+	"github.com/cilium/cilium/pkg/policy"
+	"github.com/cilium/cilium/pkg/revert"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/trigger"
+	"github.com/cilium/cilium/pkg/u8proto"
 	ciliumdns "github.com/cilium/dns"
 )
 
@@ -54,17 +57,21 @@ type StandaloneDNSProxy struct {
 	// ciliumAgentConnectionTrigger is the trigger to connect to the cilium agent
 	ciliumAgentConnectionTrigger *trigger.Trigger
 
-	// mu is the mutex to protect creation of multiple DNS rules stream in case of multiple triggers
+	// mu is the mutex to protect creation of multiple policy state stream in case of multiple triggers
 	mu lock.Mutex
 
-	// dnsRulesStream is the stream to subscribe to the DNS rules
-	dnsRulesStream standalonednsproxy.FQDNData_StreamPolicyStateClient
+	// policyStateStream is the stream to subscribe to the policy state
+	policyStateStream standalonednsproxy.FQDNData_StreamPolicyStateClient
 
-	// cancelStreamPolicyStateStream is the cancel function for the DNS rules subscription
+	// cancelStreamPolicyStateStream is the cancel function for the PolicyState stream
 	cancelStreamPolicyStateStream context.CancelFunc
 
 	// args are the arguments for the standalone DNS proxy
 	args *StandaloneDNSProxyArgs
+
+	ipToIdentityCache map[string]uint32
+
+	ipToEndpointIdCache map[string]uint64
 }
 
 // NewStandaloneDNSProxy creates a new standalone DNS proxy
@@ -75,7 +82,9 @@ func NewStandaloneDNSProxy(args *StandaloneDNSProxyArgs) (*StandaloneDNSProxy, e
 	}
 
 	return &StandaloneDNSProxy{
-		args: args,
+		args:                args,
+		ipToIdentityCache:   make(map[string]uint32),
+		ipToEndpointIdCache: make(map[string]uint64),
 	}, nil
 }
 
@@ -95,7 +104,7 @@ func (sdp *StandaloneDNSProxy) StopStandaloneDNSProxy() error {
 // CreateClient creates a client for the cilium agent connection
 // 1. It checks if connection is created, if not it returns an error and triggers the cilium agent connection trigger
 // 2. Else it creates the client
-// 3. If the DNS rules stream is not created, it creates the stream
+// 3. If the policy state stream is not created, it creates the stream
 // Note: This function is called with a mutex lock in the caller function because there can be multiple triggers trying to
 // create the stream at the same time
 func (sdp *StandaloneDNSProxy) CreateClient(ctx context.Context) error {
@@ -116,7 +125,7 @@ func (sdp *StandaloneDNSProxy) CreateClient(ctx context.Context) error {
 	// Create the client
 	sdp.Client = standalonednsproxy.NewFQDNDataClient(sdp.connection)
 
-	if sdp.dnsRulesStream == nil {
+	if sdp.policyStateStream == nil {
 		err = sdp.createStreamPolicyStateStream(ctx)
 		if err != nil {
 			log.WithError(err).Error("Failed to create subscription stream")
@@ -206,7 +215,7 @@ func (sdp *StandaloneDNSProxy) StartStandaloneDNSProxy() error {
 // createciliumAgentConnectionTriggerTrigger creates a trigger to connect to the cilium agent
 // 1. It tries to connect to the cilium agent
 // 2. If the connection is successful, it tries to start the grpc streams
-// 3. If the streams are started, it tries to subscribe to the DNS rules as go routine
+// 3. If the streams are started, it tries to subscribe to the policy state as go routine
 func (sdp *StandaloneDNSProxy) createciliumAgentConnectionTriggerTrigger() error {
 	var err error
 	sdp.ciliumAgentConnectionTrigger, err = trigger.NewTrigger(trigger.Parameters{
@@ -234,7 +243,7 @@ func (sdp *StandaloneDNSProxy) createciliumAgentConnectionTriggerTrigger() error
 			// and both try to create the client at the same time
 			// Due to the mutex, only one of them will create the client and start the stream
 			// The other one will just return
-			if sdp.dnsRulesStream == nil {
+			if sdp.policyStateStream == nil {
 				ctx, cancel := context.WithCancel(context.Background())
 
 				err = sdp.CreateClient(ctx)
@@ -244,7 +253,7 @@ func (sdp *StandaloneDNSProxy) createciliumAgentConnectionTriggerTrigger() error
 					return
 				}
 
-				// 3. Try to subscribe to the DNS rules
+				// 3. Try to subscribe to the policy state
 				sdp.cancelStreamPolicyStateStream = cancel // Store the cancel function for later use
 				go sdp.streamPolicyState(ctx)
 			}
@@ -262,14 +271,23 @@ func (sdp *StandaloneDNSProxy) createciliumAgentConnectionTriggerTrigger() error
 func (sdp *StandaloneDNSProxy) LookupEPByIP(ip netip.Addr) (ep *endpoint.Endpoint, isHost bool, err error) {
 	log.Debugf("LookupEPByIP: %s", ip.String())
 
-	secId, err := maps.GetIdentity(ip)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to get identity for IP %s", ip.String())
-		return nil, false, err
+	// find the identity from the cache
+	secId, ok := sdp.ipToIdentityCache[ip.String()]
+	if !ok {
+		log.Errorf("Failed to get identity for IP %s", ip.String())
+		return nil, false, fmt.Errorf("failed to get identity for IP %s", ip.String())
 	}
+
+	id, ok := sdp.ipToEndpointIdCache[ip.String()]
+	if !ok {
+		log.Errorf("Endpoint ID not found for IP %s", ip.String())
+		return nil, false, fmt.Errorf("endpoint ID not found for IP %s", ip.String())
+	}
+
 	endpt := &endpoint.Endpoint{
+		ID: uint16(id),
 		SecurityIdentity: &identity.Identity{
-			ID: identity.NumericIdentity(secId.SecurityIdentity),
+			ID: identity.NumericIdentity(secId),
 		},
 	}
 	log.Debugf("Endpoint Identity found: %v", endpt)
@@ -283,15 +301,16 @@ func (sdp *StandaloneDNSProxy) LookupIPsBySecID(nid identity.NumericIdentity) []
 
 func (sdp *StandaloneDNSProxy) LookupSecIDByIP(ip netip.Addr) (secID ipcache.Identity, exists bool) {
 	log.Debugf("LookupSecIDByIP: %s", ip.String())
-	secId, err := maps.GetIdentity(ip)
-	if err != nil {
-		log.WithError(err).Errorf("Failed to get identity for IP %s", ip.String())
+
+	id, ok := sdp.ipToIdentityCache[ip.String()]
+	if !ok {
+		log.Errorf("Failed to get identity for IP %s", ip.String())
 		return ipcache.Identity{}, false
 	}
 
-	log.Debugf("Identity found: %v", secId)
+	log.Debugf("Identity found: %v", id)
 	return ipcache.Identity{
-		ID:     identity.NumericIdentity(secId.SecurityIdentity),
+		ID:     identity.NumericIdentity(id),
 		Source: source.Local, // Local source means the identity is from the local agent
 	}, true
 }
@@ -343,15 +362,15 @@ func (sdp *StandaloneDNSProxy) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint
 	return nil
 }
 
-// streamPolicyState subscribes to the DNS rules
+// streamPolicyState subscribes to the policy state
 // 1. Tries to get the stream connected
-// 2. If the stream is connected, it waits for the DNS rules to be received
+// 2. If the stream is connected, it waits for the policy state to be received
 func (sdp *StandaloneDNSProxy) streamPolicyState(ctx context.Context) error {
 	var err error
 	defer func() {
 		if err != nil {
-			sdp.closeDNSRuleStream()
-			reason := "Failed to subscribe to DNS rules"
+			sdp.closePolicyStateStream()
+			reason := "Failed to subscribe to policy state"
 			switch status.Code(err) {
 			case codes.Unavailable:
 				sdp.closeConnection()
@@ -359,10 +378,10 @@ func (sdp *StandaloneDNSProxy) streamPolicyState(ctx context.Context) error {
 			default:
 				if err == io.EOF {
 					sdp.closeConnection()
-					reason = "Received EOF from DNS rules stream"
-					log.Error("Received EOF from DNS rules stream")
+					reason = "Received EOF from policy state stream"
+					log.Error("Received EOF from policy state stream")
 				} else {
-					log.WithError(err).Error("Failed to subscribe to DNS rules")
+					log.WithError(err).Error("Failed to subscribe to policy state")
 				}
 			}
 			sdp.ciliumAgentConnectionTrigger.TriggerWithReason(reason)
@@ -374,53 +393,54 @@ func (sdp *StandaloneDNSProxy) streamPolicyState(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			// Context was cancelled, exit goroutine
-			log.Info("Stopping subscription to DNS rules")
+			log.Info("Stopping subscription to policy state")
 			return nil
 		default:
-			log.Debugf("Waiting for DNS rules")
-			newRules, recvErr := sdp.dnsRulesStream.Recv()
+			log.Debugf("Waiting for policy state")
+			policyState, recvErr := sdp.policyStateStream.Recv()
 			if recvErr != nil {
 				if recvErr == io.EOF || status.Code(recvErr) == codes.Unavailable {
-					log.WithError(recvErr).Error("DNS rules stream closed")
+					log.WithError(recvErr).Error("Policy state stream closed")
 					err = recvErr
 					return err
 				}
-				log.WithError(recvErr).Error("Failed to receive DNS rules")
+				log.WithError(recvErr).Error("Failed to receive policy state")
 				err = recvErr // Set the outer err for the deferred function to handle.
 				return err
 			}
-			log.WithField("newRules", newRules).Debug("Received DNS rule")
+			log.WithField("policyState", policyState).Debug("Received policy state")
 
 			response := &standalonednsproxy.PolicyStateResponse{
-				RequestId: newRules.GetRequestId(),
+				RequestId: policyState.GetRequestId(),
 			}
-			err = sdp.DNSProxy.UpdateAllowedIdentities(newRules)
+			revertStack, err := sdp.UpdatePolicyState(policyState)
 			if err != nil {
-				log.WithError(err).Error("Failed to update DNS rules")
-				err = sdp.dnsRulesStream.Send(response)
+				log.WithError(err).Error("Failed to update policy state")
+				revertStack.Revert()
+				err = sdp.policyStateStream.Send(response)
 				if err != nil {
-					log.WithError(err).Error("Failed to send DNS policies result")
+					log.WithError(err).Error("Failed to send policy state response")
 					return err
 				}
 				return err
 			}
 			response.Response = standalonednsproxy.ResponseCode_RESPONSE_CODE_NO_ERROR
-			err = sdp.dnsRulesStream.Send(response)
+			err = sdp.policyStateStream.Send(response)
 			if err != nil {
-				log.WithError(err).Error("Failed to send DNS policies result")
+				log.WithError(err).Error("Failed to send policy state response")
 				return err
 			}
 		}
 	}
 }
 
-func (sdp *StandaloneDNSProxy) closeDNSRuleStream() {
-	if sdp.dnsRulesStream != nil {
-		err := sdp.dnsRulesStream.CloseSend()
+func (sdp *StandaloneDNSProxy) closePolicyStateStream() {
+	if sdp.policyStateStream != nil {
+		err := sdp.policyStateStream.CloseSend()
 		if err != nil {
-			log.Errorf("Failed to close DNS rules stream: %v", err)
+			log.Errorf("Failed to close policy state stream: %v", err)
 		}
-		sdp.dnsRulesStream = nil
+		sdp.policyStateStream = nil
 	}
 }
 
@@ -436,23 +456,139 @@ func (sdp *StandaloneDNSProxy) closeConnection() error {
 	return nil
 }
 
-// createStreamPolicyStateStream creates a subscription stream to the DNS rules
+// createStreamPolicyStateStream creates a subscription stream to the policy state
 func (sdp *StandaloneDNSProxy) createStreamPolicyStateStream(ctx context.Context) error {
 	if sdp.Client == nil {
 		log.Error("Client is nil")
 		return fmt.Errorf("client is nil")
 	}
 
-	if sdp.dnsRulesStream != nil {
-		log.Error("DNS rules stream is not nil")
-		sdp.closeDNSRuleStream()
+	if sdp.policyStateStream != nil {
+		log.Error("Policy state stream is not nil")
+		sdp.closePolicyStateStream()
 	}
 
 	stream, err := sdp.Client.StreamPolicyState(ctx)
 	if err != nil {
-		log.WithError(err).Error("Failed to subscribe to DNS rules")
+		log.WithError(err).Error("Failed to subscribe to policy state")
 		return err
 	}
-	sdp.dnsRulesStream = stream
+	sdp.policyStateStream = stream
+	return nil
+}
+
+// UpdatePolicyState updates the DNS rules in the standalone DNS proxy
+// 1. It updates the ip to identity cache and ip to endpoint id cache
+// 2. It updates the DNS rules in the standalone DNS proxy
+// The input is the policy state received from the cilium agent as :
+//
+//	PolicyState : {
+//	  EgressL7DnsPolicy : [
+//	    {
+//	    SourceIdentity : 1
+//	    DnsServers : [{
+//	      DnsServerIdentity : 2
+//	      DnsServerPort : 53
+//	      DnsServerProto : 17
+//	    	},
+//	    	{
+//	      DnsServerIdentity : 3
+//	      DnsServerPort : 53
+//	      DnsServerProto : 17
+//	    	}]
+//	    DnsPattern : ["www.example.com"]
+//	    },
+//	    {
+//	    SourceIdentity : 1
+//	    DnsServers : [{
+//	      DnsServerIdentity : 2
+//	      DnsServerPort : 54
+//	      DnsServerProto : 17
+//	    	}]
+//	    DnsPattern : ["www.test.com"]
+//	    }
+//	  ]
+//	  IdentityToEndpointMapping : []
+//	}
+func (sdp *StandaloneDNSProxy) UpdatePolicyState(rules *standalonednsproxy.PolicyState) (revert.RevertStack, error) {
+	log.Debugf("Received policy state: %v", rules)
+
+	var revertStack revert.RevertStack
+	identityToEndpointMapping := rules.GetIdentityToEndpointMapping()
+
+	// Update the ip to identity cache and ip to endpoint id cache
+	for _, mapping := range identityToEndpointMapping {
+		for _, epInfo := range mapping.GetEndpointInfo() {
+			for _, ip := range epInfo.GetIp() {
+				sdp.ipToIdentityCache[string(ip)] = mapping.GetIdentity()
+				if epInfo.GetId() != 0 {
+					sdp.ipToEndpointIdCache[string(ip)] = epInfo.GetId()
+				}
+			}
+		}
+	}
+
+	endpointIdToRule := make(map[uint64]map[restore.PortProto]map[policy.CachedSelector][]string)
+	for _, rule := range rules.GetEgressL7DnsPolicy() {
+
+		eps := sdp.GetSourceEndpointInfo(rule.GetSourceIdentity(), identityToEndpointMapping)
+		if len(eps) == 0 {
+			log.Errorf("No endpoint found for identity %d", rule.GetSourceIdentity())
+			continue
+		}
+		portProtoToServerIdentity := make(map[restore.PortProto][]uint32)
+		for _, dnsServer := range rule.GetDnsServers() {
+			portProto := restore.MakeV2PortProto(uint16(dnsServer.GetDnsServerPort()), u8proto.U8proto(dnsServer.GetDnsServerProto()))
+			portProtoToServerIdentity[portProto] = append(portProtoToServerIdentity[portProto], dnsServer.GetDnsServerIdentity())
+		}
+
+		portProtoToDNSrules := make(map[restore.PortProto]map[policy.CachedSelector][]string)
+		for portProto, identities := range portProtoToServerIdentity {
+			cs := make(map[policy.CachedSelector][]string)
+			cs[&dnsproxy.DnsServerIdentity{Identities: identities}] = rule.GetDnsPattern()
+			portProtoToDNSrules[portProto] = cs
+		}
+
+		for _, ep := range eps {
+			epId := ep.GetId()
+			if epId == 0 {
+				continue
+			}
+			if _, ok := endpointIdToRule[epId]; !ok {
+				endpointIdToRule[epId] = make(map[restore.PortProto]map[policy.CachedSelector][]string)
+			}
+
+			for portProto, cs := range portProtoToDNSrules {
+				if _, ok := endpointIdToRule[epId][portProto]; !ok {
+					endpointIdToRule[epId][portProto] = make(map[policy.CachedSelector][]string)
+				}
+
+				for k, v := range cs {
+					endpointIdToRule[epId][portProto][k] = v
+				}
+			}
+		}
+	}
+
+	for epId, rules := range endpointIdToRule {
+		for portProto, cs := range rules {
+			revertFunc, err := sdp.DNSProxy.UpdateAllowedStandaloneDnsProxy(epId, portProto, cs)
+			if err != nil {
+				log.WithError(err).Error("Failed to update DNS rules")
+				return revertStack, err
+			}
+			revertStack.Push(revertFunc)
+		}
+	}
+
+	return revertStack, nil
+}
+
+func (sdp *StandaloneDNSProxy) GetSourceEndpointInfo(identity uint32, epInfos []*standalonednsproxy.IdentityToEndpointMapping) []*standalonednsproxy.EndpointInfo {
+	for _, epInfo := range epInfos {
+		if epInfo.GetIdentity() == identity {
+			return epInfo.GetEndpointInfo()
+		}
+	}
 	return nil
 }

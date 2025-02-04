@@ -13,8 +13,8 @@ type checkStandaloneDnsProxy struct{}
 
 func (t checkStandaloneDnsProxy) build(ct *check.ConnectivityTest, templates map[string]string) {
 	newTest("check-standalone-dns-proxy", ct).
-		WithCiliumPolicy(templates["clientEgressOnlyDNSPolicyYAML"]).
-		WithFeatureRequirements(features.RequireEnabled(features.L7Proxy), features.RequireEnabled(features.IPv4)). // Flags for standalone DNS proxy
+		WithCiliumPolicy(templates["clientEgressStandaloneDNSProxyYAML"]).
+		WithFeatureRequirements(features.RequireEnabled(features.L7Proxy), features.RequireEnabled(features.IPv4), features.RequireEnabled(features.StandaloneDNSProxy)). // Flags for standalone DNS proxy
 		WithScenarios(
 			tests.StandaloneDNSProxy(),
 		)

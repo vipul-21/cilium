@@ -42,7 +42,7 @@ type proxyRuleUpdater interface {
 }
 
 type sdpPolicyUpdater interface {
-	UpdatePolicyRulesLocked(map[identity.NumericIdentity]policy.SelectorPolicy) error
+	UpdatePolicyRulesLocked(map[identity.NumericIdentity]policy.SelectorPolicy, bool) error
 }
 
 // setRules replaces old l7 rules of a redirect with new ones.

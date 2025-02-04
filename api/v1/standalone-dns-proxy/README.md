@@ -6,8 +6,9 @@
 - [standalone-dns-proxy/standalone-dns-proxy.proto](#standalone-dns-proxy_standalone-dns-proxy-proto)
     - [DNSPolicy](#standalonednsproxy-DNSPolicy)
     - [DNSServer](#standalonednsproxy-DNSServer)
+    - [EndpointInfo](#standalonednsproxy-EndpointInfo)
     - [FQDNMapping](#standalonednsproxy-FQDNMapping)
-    - [IdentityToIPMapping](#standalonednsproxy-IdentityToIPMapping)
+    - [IdentityToEndpointMapping](#standalonednsproxy-IdentityToEndpointMapping)
     - [PolicyState](#standalonednsproxy-PolicyState)
     - [PolicyStateResponse](#standalonednsproxy-PolicyStateResponse)
     - [UpdateMappingResponse](#standalonednsproxy-UpdateMappingResponse)
@@ -37,7 +38,7 @@ L7 DNS policy specifying which requests are permitted to which DNS server
 | ----- | ---- | ----- | ----------- |
 | source_identity | [uint32](#uint32) |  | Identity of the workload this L7 DNS policy should apply to |
 | dns_pattern | [string](#string) | repeated | Allowed DNS pattern this identity is allowed to resolve. |
-| dns_servers | [DNSServer](#standalonednsproxy-DNSServer) | repeated | List of DNS servers to be allowed to |
+| dns_servers | [DNSServer](#standalonednsproxy-DNSServer) | repeated | List of DNS servers to be allowed to connect. |
 
 
 
@@ -55,6 +56,22 @@ DNServer identity, port and protocol the requests be allowed to
 | dns_server_identity | [uint32](#uint32) |  | Identity of destination DNS server |
 | dns_server_port | [uint32](#uint32) |  |  |
 | dns_server_proto | [uint32](#uint32) |  |  |
+
+
+
+
+
+
+<a name="standalonednsproxy-EndpointInfo"></a>
+
+### EndpointInfo
+cilium endpoint ipaddress and ID
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| id | [uint64](#uint64) |  |  |
+| ip | [bytes](#bytes) | repeated |  |
 
 
 
@@ -81,16 +98,16 @@ FQDN-IP mapping goalstate sent from SDP to agent
 
 
 
-<a name="standalonednsproxy-IdentityToIPMapping"></a>
+<a name="standalonednsproxy-IdentityToEndpointMapping"></a>
 
-### IdentityToIPMapping
-Cilium Identity ID to IP address mapping
+### IdentityToEndpointMapping
+Cilium Identity ID to Endpoint  mapping
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | identity | [uint32](#uint32) |  |  |
-| ip | [bytes](#bytes) | repeated |  |
+| endpoint_info | [EndpointInfo](#standalonednsproxy-EndpointInfo) | repeated |  |
 
 
 
@@ -108,7 +125,7 @@ and destinatione egress endpoints enforcing fqdn rules.
 | ----- | ---- | ----- | ----------- |
 | egress_l7_dns_policy | [DNSPolicy](#standalonednsproxy-DNSPolicy) | repeated |  |
 | request_id | [string](#string) |  | Random UUID based identifier which will be referenced in ACKs |
-| identity_to_ip_mapping | [IdentityToIPMapping](#standalonednsproxy-IdentityToIPMapping) | repeated | Identity to IP mapping for the DNS server and the source identity |
+| identity_to_endpoint_mapping | [IdentityToEndpointMapping](#standalonednsproxy-IdentityToEndpointMapping) | repeated | Identity to Endpoint mapping for the DNS server and the source identity |
 
 
 
