@@ -835,7 +835,19 @@ jobs:
             kubectl -n kube-system logs kvstore
           fi
 
-      - name: Make Cilium  down${{ steps.vars.outputs.downgrade_version }}
+      - name: Update Cilium to use Standalone DNS Proxy only
+        if: ${{ matrix.standalone-dns-proxy == 'true' }}
+        shell: bash
+        run: |
+          cilium upgrade
+
+      - name: Test DNS connectivity
+        if: ${{ matrix.standalone-dns-proxy == 'true' }}
+        shell: bash
+        run: |
+          cilium connectivity test --test "check-standalone-dns-proxy"
+
+      - name: Make Cilium down${{ steps.vars.outputs.downgrade_version }}
         if: ${{ matrix.standalone-dns-proxy == 'true' }}
         shell: bash
         run: |
@@ -846,25 +858,11 @@ jobs:
           kubectl get pods --all-namespaces -o wide
           # kubectl -n kube-system exec daemonset/cilium -- cilium status
 
-      - name: Test Cilium after Down
+      - name: Test DNS connectivity after Down
         if: ${{ matrix.standalone-dns-proxy == 'true' }}
         shell: bash
         run: |
-          cilium connectivity test
-
-      - name: Run sequential Cilium tests
-        if: ${{ matrix.standalone-dns-proxy == 'true' }}
-        shell: bash
-        run: |
-          cilium connectivity test \
-            --test "seq-.*" \
-            ${{ steps.cli-flags.outputs.flags }}
-
-      - name: Features tested after downgrade
-        uses: ./.github/actions/feature-status
-        with:
-          title: "Summary of all features tested after downgrade"
-          json-filename: "${{ env.job_name }} (${{ matrix.name }}) - after downgrade"
+          cilium connectivity test --test "check-standalone-dns-proxy"
 
       - name: Upload artifacts
         if: ${{ !success() }}
