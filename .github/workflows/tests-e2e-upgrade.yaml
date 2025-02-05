@@ -497,9 +497,8 @@ jobs:
             kernel: '6.12-20241218.004849'
             kube-proxy: 'none'
             kpr: 'true'
-            l7-proxy: 'true'
             standalone-dns-proxy: 'true'
-            embedded-dns-proxy: 'false'
+            misc: 'l7Proxy=true,enableEmbeddedDNSProxy=false,dnsProxy.proxyPort=40046'
 
           # Example of a feature that is being introduced, and we want to test
           # it without performing an upgrade, we use skip-upgrade: 'true'
@@ -566,8 +565,6 @@ jobs:
           ciliumendpointslice: ${{ matrix.ciliumendpointslice }}
           local-redirect-policy: ${{ matrix.local-redirect-policy }}
           bgp-control-plane: ${{ matrix.bgp-control-plane }}
-          l7-proxy: ${{ matrix.l7-proxy }}
-          embedded-dns-proxy: ${{ matrix.embedded-dns-proxy }}
           standalone-dns-proxy: ${{ matrix.standalone-dns-proxy }}
 
       - name: Derive newest Cilium installation config
