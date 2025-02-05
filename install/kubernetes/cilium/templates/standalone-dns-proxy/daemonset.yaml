@@ -19,18 +19,13 @@ metadata:
     {{- end }}
 spec:
   minReadySeconds: 5
-  # updateStrategy:
-  #   rollingUpdate:
-  #     maxUnavailable: 0
-  #     maxSurge: 2
-  #   type: RollingUpdate
+  {{- with .Values.standaloneDnsProxy.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       k8s-app: standalone-dns-proxy
-  {{- with .Values.standaloneDnsProxy.updateStrategy }}
-  updateStrategy:
-    {{- toYaml . | trim | nindent 4 }}
-  {{- end }}
   template:
     metadata:
       annotations:
@@ -42,24 +37,15 @@ spec:
         app.kubernetes.io/name: standalone-dns-proxy
         app.kubernetes.io/part-of: cilium
         {{- with .Values.commonLabels }}
-        {{- toYaml . | nindent 8 }}
+          {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
       hostNetwork: true
       automountServiceAccountToken: {{ .Values.standaloneDnsProxy.automountServiceAccountToken }}
-      # nodeSelector:
-      #   kubernetes.io/os: linux
       {{- with .Values.standaloneDnsProxy.nodeSelector }}
       nodeSelector:
-        {{- toYaml . | trim | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
       {{- end }}
-      # tolerations:
-      #   - key: CriticalAddonsOnly
-      #     operator: Exists
-      #   - operator: "Exists"
-      #     effect: NoExecute
-      #   - operator: "Exists"
-      #     effect: NoSchedule
       {{- with .Values.standaloneDnsProxy.tolerations }}
       tolerations:
         {{- toYaml . | trim | nindent 8 }}

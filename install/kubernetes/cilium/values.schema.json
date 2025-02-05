@@ -1651,6 +1651,9 @@
     "enableCriticalPriorityClass": {
       "type": "boolean"
     },
+    "enableEmbeddedDNSProxy": {
+      "type": "boolean"
+    },
     "enableIPv4BIGTCP": {
       "type": "boolean"
     },
@@ -5382,6 +5385,92 @@
       "properties": {
         "enabled": {
           "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "standaloneDnsProxy": {
+      "properties": {
+        "annotations": {
+          "type": "object"
+        },
+        "automountServiceAccountToken": {
+          "type": "boolean"
+        },
+        "debug": {
+          "type": "boolean"
+        },
+        "dnsCompression": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "properties": {
+            "digest": {
+              "type": "string"
+            },
+            "override": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "pullPolicy": {
+              "type": "string"
+            },
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "useDigest": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "l7Proxy": {
+          "type": "boolean"
+        },
+        "nodeSelector": {
+          "properties": {
+            "kubernetes.io/os": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "proxyPort": {
+          "type": "integer"
+        },
+        "serverPort": {
+          "type": "integer"
+        },
+        "tolerations": {
+          "items": {},
+          "type": "array"
+        },
+        "updateStrategy": {
+          "properties": {
+            "rollingUpdate": {
+              "properties": {
+                "maxSurge": {
+                  "type": "integer"
+                },
+                "maxUnavailable": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "type": {
+              "type": "string"
+            }
+          },
+          "type": "object"
         }
       },
       "type": "object"

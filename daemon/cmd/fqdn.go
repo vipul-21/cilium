@@ -100,7 +100,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 		MaxRestoreDNSIPs:       option.Config.DNSMaxIPsPerRestoredRule,
 		ConcurrencyLimit:       option.Config.DNSProxyConcurrencyLimit,
 		ConcurrencyGracePeriod: option.Config.DNSProxyConcurrencyProcessingGracePeriod,
-		DisableDNSProxy:        option.Config.DisableEmbeddedDNSProxy,
+		DisableDNSProxy:        !option.Config.EnableEmbeddedDNSProxy,
 	}
 	proxy.DefaultDNSProxy, err = dnsproxy.StartDNSProxy(dnsProxyConfig, d.lookupEPByIP, d.ipcache.LookupSecIDByIP, d.ipcache.LookupByIdentity,
 		d.notifyOnDNSMsg)
@@ -111,7 +111,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 		// If the embedded dns proxy is disabled then we use the Standalone dns proxy port as the DNS proxy port.
 		// There is an assumption here that the Standalone DNS proxy will be listening on the ToFQDNsProxyPort.
 		// It will be hard fail if the standalone DNS proxy is not enabled.
-		if option.Config.DisableEmbeddedDNSProxy {
+		if !option.Config.EnableEmbeddedDNSProxy {
 			if option.Config.EnableStandaloneDNSProxy && option.Config.ToFQDNsProxyPort != 0 {
 				assignedPort = uint16(option.Config.ToFQDNsProxyPort)
 			} else {
