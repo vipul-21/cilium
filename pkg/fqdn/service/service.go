@@ -262,23 +262,36 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericId
 	for identity, pol := range s.currentSnapshot {
 		for l4, polSelTuple := range pol.RedirectFilters() {
 			parseType := l4.GetL7Parser()
-			if parseType == policy.ParserTypeDNS {
+			switch parseType {
+			case policy.ParserTypeDNS:
 				selectorPolicy := polSelTuple.Policy
 				cacheSelector := polSelTuple.Selector
 
 				// Acquire the lock to read the current state of the identity to IP mapping
 				s.identityToIpMutex.Lock()
-				dnsServers := make([]*standalonednsproxy.DNSServer, 0, len(cacheSelector.GetSelections(versioned.Latest())))
-				for _, sel := range cacheSelector.GetSelections(versioned.Latest()) {
+				var dnsServersIdentity []uint32
+				var dnsServers []*standalonednsproxy.DNSServer
+				if cacheSelector != nil {
+					for _, sel := range cacheSelector.GetSelections(versioned.Latest()) {
+						dnsServersIdentity = append(dnsServersIdentity, sel.Uint32())
+						identityToEndpointMapping = append(identityToEndpointMapping, &standalonednsproxy.IdentityToEndpointMapping{
+							Identity:     sel.Uint32(),
+							EndpointInfo: s.convertEndpointInfo(s.currentIdentityToIp[sel]),
+						})
+					}
+					dnsServers = make([]*standalonednsproxy.DNSServer, 0, len(cacheSelector.GetSelections(versioned.Latest())))
+					for _, dnsServerIdentity := range dnsServersIdentity {
+						dnsServers = append(dnsServers, &standalonednsproxy.DNSServer{
+							DnsServerIdentity: dnsServerIdentity,
+							DnsServerPort:     uint32(l4.GetPort()),
+							DnsServerProto:    uint32(l4.U8Proto),
+						})
+					}
+				} else {
+					dnsServers = make([]*standalonednsproxy.DNSServer, 0, 1)
 					dnsServers = append(dnsServers, &standalonednsproxy.DNSServer{
-						DnsServerIdentity: sel.Uint32(),
-						DnsServerPort:     uint32(l4.GetPort()),
-						DnsServerProto:    uint32(l4.U8Proto),
-					})
-
-					identityToEndpointMapping = append(identityToEndpointMapping, &standalonednsproxy.IdentityToEndpointMapping{
-						Identity:     sel.Uint32(),
-						EndpointInfo: s.convertEndpointInfo(s.currentIdentityToIp[sel]),
+						DnsServerPort:  uint32(l4.GetPort()),
+						DnsServerProto: uint32(l4.U8Proto),
 					})
 				}
 				var dnsPattern []string
