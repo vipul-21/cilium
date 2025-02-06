@@ -498,7 +498,8 @@ jobs:
             kube-proxy: 'none'
             kpr: 'true'
             standalone-dns-proxy: 'true'
-            misc: 'l7Proxy=true,enableEmbeddedDNSProxy=false,dnsProxy.proxyPort=40046'
+            misc: 'l7Proxy=true,dnsProxy.enabled=false,dnsProxy.proxyPort=40046'
+            skip-upgrade: 'true'
 
           # Example of a feature that is being introduced, and we want to test
           # it without performing an upgrade, we use skip-upgrade: 'true'
@@ -565,7 +566,6 @@ jobs:
           ciliumendpointslice: ${{ matrix.ciliumendpointslice }}
           local-redirect-policy: ${{ matrix.local-redirect-policy }}
           bgp-control-plane: ${{ matrix.bgp-control-plane }}
-          standalone-dns-proxy: ${{ matrix.standalone-dns-proxy }}
 
       - name: Derive newest Cilium installation config
         id: cilium-newest-config
@@ -591,6 +591,7 @@ jobs:
           ciliumendpointslice: ${{ matrix.ciliumendpointslice }}
           local-redirect-policy: ${{ matrix.local-redirect-policy }}
           bgp-control-plane: ${{ matrix.bgp-control-plane }}
+          standalone-dns-proxy: ${{ matrix.standalone-dns-proxy }}
 
       - name: Set Kind params
         id: kind-params
@@ -837,12 +838,12 @@ jobs:
         shell: bash
         run: |
           cilium upgrade \
-            --set image.override=quay.io/cilium/cilium:invalid-image
+            --set image.override=quay.io/cilium/cilium:invalid-image \
+            {{ steps.cilium-stable-config.outputs.config }} \
+            ${{ steps.kvstore.outputs.config }}
 
-          # cilium status --wait --interactive=false --wait-duration=10m
-          kubectl get pods --all-namespaces -o wide
           kubectl rollout status -n kube-system daemonset/cilium
-          # kubectl -n kube-system exec daemonset/cilium -- cilium status
+          kubectl get pods --all-namespaces -o wide
 
       - name: Test DNS connectivity after Down
         if: ${{ matrix.standalone-dns-proxy == 'true' }}
