@@ -1032,6 +1032,10 @@
      - Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present.
      - bool
      - ``true``
+   * - :spelling:ignore:`dnsProxy.enabled`
+     - Enable DNS proxy
+     - bool
+     - ``true``
    * - :spelling:ignore:`dnsProxy.endpointMaxIpPerHostname`
      - Maximum number of IPs to maintain per FQDN name for each endpoint.
      - int

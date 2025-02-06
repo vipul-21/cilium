@@ -1607,6 +1607,9 @@
         "enableDnsCompression": {
           "type": "boolean"
         },
+        "enabled": {
+          "type": "boolean"
+        },
         "endpointMaxIpPerHostname": {
           "type": "integer"
         },

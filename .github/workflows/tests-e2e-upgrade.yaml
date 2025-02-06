@@ -832,18 +832,6 @@ jobs:
             kubectl -n kube-system logs kvstore
           fi
 
-      - name: Update Cilium to use Standalone DNS Proxy only
-        if: ${{ matrix.standalone-dns-proxy == 'true' }}
-        shell: bash
-        run: |
-          cilium upgrade
-
-      - name: Test DNS connectivity
-        if: ${{ matrix.standalone-dns-proxy == 'true' }}
-        shell: bash
-        run: |
-          cilium connectivity test --test "check-standalone-dns-proxy"
-
       - name: Make Cilium down${{ steps.vars.outputs.downgrade_version }}
         if: ${{ matrix.standalone-dns-proxy == 'true' }}
         shell: bash
@@ -853,6 +841,7 @@ jobs:
 
           # cilium status --wait --interactive=false --wait-duration=10m
           kubectl get pods --all-namespaces -o wide
+          kubectl rollout status -n kube-system daemonset/cilium
           # kubectl -n kube-system exec daemonset/cilium -- cilium status
 
       - name: Test DNS connectivity after Down

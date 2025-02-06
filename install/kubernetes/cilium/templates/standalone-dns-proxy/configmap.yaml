@@ -15,11 +15,11 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 data:
-  config.yaml: |
-    enable-l7-proxy: {{ .Values.standaloneDnsProxy.l7Proxy | quote }}
-    debug: {{ .Values.standaloneDnsProxy.debug | quote }}
-    enable-ipv4: "true"
-    tofqdns-proxy-port: {{ .Values.standaloneDnsProxy.proxyPort | quote }}
-    tofqdns-server-port: {{ .Values.standaloneDnsProxy.serverPort | quote }}
-    tofqdns-enable-dns-compression: {{ .Values.standaloneDnsProxy.dnsCompression | quote }}
+  enable-l7-proxy: {{ .Values.standaloneDnsProxy.l7Proxy | quote }}
+  debug: {{ .Values.standaloneDnsProxy.debug | quote }}
+  enable-standalone-dns-proxy: {{ .Values.standaloneDnsProxy.enabled | quote }}
+  enable-ipv4: "true"
+  tofqdns-proxy-port: {{ .Values.standaloneDnsProxy.proxyPort | quote }}
+  tofqdns-server-port: {{ .Values.standaloneDnsProxy.serverPort | quote }}
+  tofqdns-enable-dns-compression: {{ .Values.standaloneDnsProxy.dnsCompression | quote }}
 {{- end }}
