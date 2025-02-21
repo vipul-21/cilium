@@ -315,7 +315,7 @@ func (sdp *StandaloneDNSProxy) LookupSecIDByIP(ip netip.Addr) (secID ipcache.Ide
 	}, true
 }
 
-func (sdp *StandaloneDNSProxy) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr string, msg *ciliumdns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
+func (sdp *StandaloneDNSProxy) NotifyOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, serverAddr netip.AddrPort, msg *ciliumdns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
 	log.Debugf("Received DNS message: %v", msg)
 	qname, responseIPs, TTL, _, rcode, _, _, err := dnsproxy.ExtractMsgDetails(msg)
 	if err != nil {
@@ -528,14 +528,14 @@ func (sdp *StandaloneDNSProxy) UpdatePolicyState(rules *standalonednsproxy.Polic
 		}
 	}
 
-	endpointIdToRule := make(map[uint64]map[restore.PortProto]map[policy.CachedSelector][]string)
+	endpointIdToRule := make(map[uint32]map[restore.PortProto]map[policy.CachedSelector][]string)
 	for _, rule := range rules.GetEgressL7DnsPolicy() {
 
-		eps := sdp.GetSourceEndpointInfo(rule.GetSourceIdentity(), identityToEndpointMapping)
-		if len(eps) == 0 {
-			log.Errorf("No endpoint found for identity %d", rule.GetSourceIdentity())
-			continue
-		}
+		// eps := sdp.GetSourceEndpointInfo(rule.GetSourceEndpointId(), en)
+		// if len(eps) == 0 {
+		// 	log.Errorf("No endpoint found for identity %d", rule.GetSourceIdentity())
+		// 	continue
+		// }
 		portProtoToServerIdentity := make(map[restore.PortProto][]uint32)
 		for _, dnsServer := range rule.GetDnsServers() {
 			portProto := restore.MakeV2PortProto(uint16(dnsServer.GetDnsServerPort()), u8proto.U8proto(dnsServer.GetDnsServerProto()))
@@ -549,11 +549,12 @@ func (sdp *StandaloneDNSProxy) UpdatePolicyState(rules *standalonednsproxy.Polic
 			portProtoToDNSrules[portProto] = cs
 		}
 
-		for _, ep := range eps {
-			epId := ep.GetId()
-			if epId == 0 {
-				continue
-			}
+		// for _, ep := range eps {
+			// epId := ep.GetId()
+			// if epId == 0 {
+			// 	continue
+			// }
+			epId := rule.GetSourceEndpointId()
 			if _, ok := endpointIdToRule[epId]; !ok {
 				endpointIdToRule[epId] = make(map[restore.PortProto]map[policy.CachedSelector][]string)
 			}
@@ -567,12 +568,12 @@ func (sdp *StandaloneDNSProxy) UpdatePolicyState(rules *standalonednsproxy.Polic
 					endpointIdToRule[epId][portProto][k] = v
 				}
 			}
-		}
+		// }
 	}
 
 	for epId, rules := range endpointIdToRule {
 		for portProto, cs := range rules {
-			revertFunc, err := sdp.DNSProxy.UpdateAllowedStandaloneDnsProxy(epId, portProto, cs)
+			revertFunc, err := sdp.DNSProxy.UpdateAllowedStandaloneDnsProxy(uint64(epId), portProto, cs)
 			if err != nil {
 				log.WithError(err).Error("Failed to update DNS rules")
 				return revertStack, err

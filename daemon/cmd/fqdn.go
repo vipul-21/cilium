@@ -66,6 +66,7 @@ func (d *Daemon) bootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint, 
 		return nil
 	}
 
+	log.Info("Starting DNS proxy-Vipul")
 	if option.Config.EnableStandaloneDNSProxy {
 		// Start the standalone DNS proxy grpc server
 		d.bootstrapStandaloneDNSProxyServer()
@@ -396,9 +397,10 @@ func (d *Daemon) updateOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, qna
 		},
 	})
 
-	stat.PolicyGenerationTime.End(true)
-	stat.DataplaneTime.Start()
-
+	if stat != nil {
+		stat.PolicyGenerationTime.End(true)
+		stat.DataplaneTime.Start()
+	}
 	if err := dpUpdates.Wait(); err != nil {
 		log.Warning("Timed out waiting for datapath updates of FQDN IP information; returning response. Consider increasing --tofqdns-proxy-response-max-delay if this keeps happening.")
 		metrics.ProxyDatapathUpdateTimeout.Inc()
@@ -420,9 +422,10 @@ func (d *Daemon) updateOnDNSMsg(lookupTime time.Time, ep *endpoint.Endpoint, qna
 func (d *Daemon) bootstrapStandaloneDNSProxyServer() {
 	sdpServer := service.NewServer(d.endpointManager, d.updateOnDNSMsg)
 	proxy.GlobalStandaloneDNSProxy = sdpServer
-
+	log.Info("Starting Standalone DNS Proxy server Vipul")
 	// Add the Standalone DNS Proxy as a listener to the IPCache
 	d.ipcache.AddListener(sdpServer)
+	log.Info("Starting Standalone DNS Proxy server-2 Vipul")
 
 	go service.RunServer(option.Config.ToFqdnsServerPort, sdpServer)
 }

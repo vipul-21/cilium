@@ -224,7 +224,7 @@ func (s *FQDNDataServer) convertEndpointInfo(ips []net.IP) []*standalonednsproxy
 }
 
 // OnIPIdentityCacheChange is a method to receive the IP identity cache change events
-func (s *FQDNDataServer) OnIPIdentityCacheChange(modType ipcache.CacheModification, cidr types.PrefixCluster, oldHostIP, newHostIP net.IP, oldID *ipcache.Identity, newID ipcache.Identity, encryptKey uint8, k8sMeta *ipcache.K8sMetadata) {
+func (s *FQDNDataServer) OnIPIdentityCacheChange(modType ipcache.CacheModification, cidr types.PrefixCluster, oldHostIP, newHostIP net.IP, oldID *ipcache.Identity, newID ipcache.Identity, encryptKey uint8, k8sMeta *ipcache.K8sMetadata, endpointFlags uint8) {
 	s.identityToIpMutex.Lock()
 	switch modType {
 	case ipcache.Upsert:
@@ -306,11 +306,32 @@ func (s *FQDNDataServer) UpdatePolicyRulesLocked(policies map[identity.NumericId
 						}
 					}
 				}
-				egressL7DnsPolicy = append(egressL7DnsPolicy, &standalonednsproxy.DNSPolicy{
-					SourceIdentity: identity.Uint32(),
-					DnsServers:     dnsServers,
-					DnsPattern:     dnsPattern,
-				})
+				log.Infof("currentIdentityToIp Vipul: %v", s.currentIdentityToIp)
+				log.Infof("Identity Vipul: %v", identity)
+				epIPs := s.currentIdentityToIp[identity]
+				log.Infof("epIPs Vipul: %v", epIPs)
+				for _, epIP := range epIPs {
+					log.Infof("epIP Vipul: %v", epIP)
+					ep := s.endpointManager.LookupIP(netip.MustParseAddr(epIP.String()))
+					log.Infof("ep Vipul: %v", ep)
+					if ep == nil {
+						// If the endpoint is not found, log a warning
+						// This can happen for the endpoints that are not managed by this cilium agent
+						log.Warnf("Endpoint not found for IP: %s", epIP)
+						continue
+					}
+					egressL7DnsPolicy = append(egressL7DnsPolicy, &standalonednsproxy.DNSPolicy{
+						SourceEndpointId: uint32(ep.GetID()),
+						DnsServers:       dnsServers,
+						DnsPattern:       dnsPattern,
+					})
+				}
+				// epID := s.endpointManager.LookupIP(s.currentIdentityToIp[identity])
+				// egressL7DnsPolicy = append(egressL7DnsPolicy, &standalonednsproxy.DNSPolicy{
+				// 	SourceEndpointId: epID,
+				// 	DnsServers:     dnsServers,
+				// 	DnsPattern:     dnsPattern,
+				// })
 
 				identityToEndpointMapping = append(identityToEndpointMapping, &standalonednsproxy.IdentityToEndpointMapping{
 					Identity:     identity.Uint32(),

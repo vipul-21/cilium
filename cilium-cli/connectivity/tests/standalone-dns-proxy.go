@@ -16,7 +16,9 @@ func StandaloneDNSProxy() check.Scenario {
 	return &standaloneDNSProxy{}
 }
 
-type standaloneDNSProxy struct{}
+type standaloneDNSProxy struct{
+	check.ScenarioBase
+}
 
 func (s *standaloneDNSProxy) Name() string {
 	return "standalone-dns-proxy"

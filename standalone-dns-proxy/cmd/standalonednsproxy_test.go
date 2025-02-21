@@ -152,8 +152,8 @@ func (m *MockFQDNDataServer) StreamPolicyState(stream standalonednsproxy.FQDNDat
 		err := stream.Send(&standalonednsproxy.PolicyState{
 			EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
 				{
-					SourceIdentity: 1,
-					DnsPattern:     []string{"*.cilium.io", "example.com"},
+					SourceEndpointId: 1,
+					DnsPattern:       []string{"*.cilium.io", "example.com"},
 					DnsServers: []*standalonednsproxy.DNSServer{
 						{
 							DnsServerIdentity: 2,
@@ -278,7 +278,7 @@ func TestSubscribeToPolicyState(t *testing.T) {
 			return []string{}
 		},
 		// NotifyOnDNSMsg
-		func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, dstAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
+		func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, dstAddr netip.AddrPort, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
 			return nil
 		},
 	)
@@ -358,23 +358,23 @@ func TestNotifyOnDNSMsg(t *testing.T) {
 	msg.Answer = append(msg.Answer, retARR)
 
 	// Case 1: NotifyOnDNSMsg is called successfully
-	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1:80", serverId, "10.0.0.1", msg, "udp", true, nil)
+	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1:80", serverId, netip.AddrPortFrom(netip.MustParseAddr("10.0.0.1"), 53), msg, "udp", true, nil)
 	require.NoError(t, err)
 
 	// Case 2: NotifyOnDNSMsg is called with invalid epIpPort
-	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1", serverId, "10.0.0.1", msg, "udp", true, nil)
+	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1", serverId, netip.AddrPortFrom(netip.MustParseAddr("10.0.0.1"), 53), msg, "udp", true, nil)
 	require.Error(t, err)
 
 	// Case 3: NotifyOnDNSMsg is called with nil client
 	sdp.Client = nil
-	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1:80", serverId, "10.0.0.1", msg, "udp", true, nil)
+	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1:80", serverId, netip.AddrPortFrom(netip.MustParseAddr("10.0.0.1"), 53), msg, "udp", true, nil)
 	require.Error(t, err)
 
 	// Case 4: NotifyOnDNSMsg is called with invalid msg
 	err = sdp.CreateClient(ctx)
 	require.NoError(t, err)
 	msg = new(dns.Msg)
-	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1:80", serverId, "10.0.0.1", msg, "udp", true, nil)
+	err = sdp.NotifyOnDNSMsg(time.Now(), ep, "1.1.1.1:80", serverId, netip.AddrPortFrom(netip.MustParseAddr("10.0.0.1"), 53), msg, "udp", true, nil)
 	require.Equal(t, errors.New("Invalid DNS message"), err)
 
 }
@@ -468,7 +468,7 @@ func TestUpdatePolicyState(t *testing.T) {
 		ConcurrencyGracePeriod: 10,
 		DNSProxyType:           dnsproxy.StandaloneDNSProxy,
 	}
-	epId := uint64(100)
+	epId := uint32(1)
 	dnsServerIps := []net.IP{
 		net.ParseIP("2.2.2.2"),
 	}
@@ -526,8 +526,8 @@ func TestUpdatePolicyState(t *testing.T) {
 			args: &standalonednsproxy.PolicyState{
 				EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
 					{
-						SourceIdentity: 1,
-						DnsPattern:     []string{"*.cilium.io", "example.com"},
+						SourceEndpointId: epId,
+						DnsPattern:       []string{"*.cilium.io", "example.com"},
 						DnsServers: []*standalonednsproxy.DNSServer{
 							{
 								DnsServerIdentity: 2,
@@ -551,8 +551,8 @@ func TestUpdatePolicyState(t *testing.T) {
 			args: &standalonednsproxy.PolicyState{
 				EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
 					{
-						SourceIdentity: 1,
-						DnsPattern:     []string{"*.cilium.io", "example.com"},
+						SourceEndpointId: epId,
+						DnsPattern:       []string{"*.cilium.io", "example.com"},
 						DnsServers: []*standalonednsproxy.DNSServer{
 							{
 								DnsServerIdentity: 2,
@@ -581,8 +581,8 @@ func TestUpdatePolicyState(t *testing.T) {
 			args: &standalonednsproxy.PolicyState{
 				EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
 					{
-						SourceIdentity: 1,
-						DnsPattern:     []string{"*.aws.io"},
+						SourceEndpointId: epId,
+						DnsPattern:       []string{"*.aws.io"},
 						DnsServers: []*standalonednsproxy.DNSServer{
 							{
 								DnsServerIdentity: 2,
@@ -592,8 +592,8 @@ func TestUpdatePolicyState(t *testing.T) {
 						},
 					},
 					{
-						SourceIdentity: 1,
-						DnsPattern:     []string{"*.cilium.io", "example.com"},
+						SourceEndpointId: epId,
+						DnsPattern:       []string{"*.cilium.io", "example.com"},
 						DnsServers: []*standalonednsproxy.DNSServer{
 							{
 								DnsServerIdentity: 3,
@@ -631,7 +631,7 @@ func TestUpdatePolicyState(t *testing.T) {
 					return []string{}
 				},
 				// NotifyOnDNSMsg
-				func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, dstAddr string, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
+				func(lookupTime time.Time, ep *endpoint.Endpoint, epIPPort string, serverID identity.NumericIdentity, dstAddr netip.AddrPort, msg *dns.Msg, protocol string, allowed bool, stat *dnsproxy.ProxyRequestContext) error {
 					return nil
 				},
 			)
@@ -645,7 +645,7 @@ func TestUpdatePolicyState(t *testing.T) {
 			}
 			require.Nil(t, err)
 
-			allowedRules, err := sdp.DNSProxy.GetAllowedRulesForEndpoint(epId)
+			allowedRules, err := sdp.DNSProxy.GetAllowedRulesForEndpoint(uint64(epId))
 			require.NoError(t, err)
 			// Compare the allowed rules with the expected output
 			for portProto, expectedSelectors := range tt.out {

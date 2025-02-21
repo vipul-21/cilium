@@ -361,7 +361,7 @@ func TestSuccessfullyStreamPolicyState(t *testing.T) {
 				policyRules: &standalonednsproxy.PolicyState{
 					EgressL7DnsPolicy: []*standalonednsproxy.DNSPolicy{
 						{
-							SourceIdentity: 1,
+							SourceEndpointId: 1,
 							DnsPattern:     []string{"*.cilium.io", "example.com"},
 							DnsServers: []*standalonednsproxy.DNSServer{
 								{
@@ -419,7 +419,7 @@ func TestSuccessfullyStreamPolicyState(t *testing.T) {
 
 			for i, expectedPolicy := range test.in.policyRules.GetEgressL7DnsPolicy() {
 				actualPolicy := actualOut.GetEgressL7DnsPolicy()[i]
-				require.Equal(t, expectedPolicy.GetSourceIdentity(), actualPolicy.GetSourceIdentity())
+				require.Equal(t, expectedPolicy.GetSourceEndpointId(), actualPolicy.GetSourceEndpointId())
 				require.Equal(t, expectedPolicy.GetDnsPattern(), actualPolicy.GetDnsPattern())
 				require.Equal(t, len(expectedPolicy.GetDnsServers()), len(actualPolicy.GetDnsServers()))
 				for j, expectedServer := range expectedPolicy.GetDnsServers() {
