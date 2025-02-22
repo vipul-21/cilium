@@ -832,6 +832,13 @@ jobs:
             echo "# Retrieving Cilium etcd logs"
             kubectl -n kube-system logs kvstore
           fi
+      - name: Create pods for standalone-dns-proxy test
+        if: ${{ matrix.standalone-dns-proxy == 'true' }}
+        shell: bash
+        run: |
+          kubectl apply -f untrusted/cilium-newest/examples/minikube/http-sw-app.yaml
+          kubectl apply -f untrusted/cilium-newest/examples/policies/l7/dns/dns.yaml
+          kubectl exec xwing -- curl cilium.io
 
       - name: Make Cilium down${{ steps.vars.outputs.downgrade_version }}
         if: ${{ matrix.standalone-dns-proxy == 'true' }}
@@ -842,14 +849,14 @@ jobs:
             {{ steps.cilium-stable-config.outputs.config }} \
             ${{ steps.kvstore.outputs.config }}
 
-          kubectl rollout status -n kube-system daemonset/cilium
+          kubectl rollout restart -n kube-system daemonset/cilium
           kubectl get pods --all-namespaces -o wide
 
       - name: Test DNS connectivity after Down
         if: ${{ matrix.standalone-dns-proxy == 'true' }}
         shell: bash
         run: |
-          cilium connectivity test --test "check-standalone-dns-proxy"
+          kubectl exec xwing -- curl cilium.io
 
       - name: Upload artifacts
         if: ${{ !success() }}

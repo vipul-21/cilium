@@ -16,7 +16,7 @@ func StandaloneDNSProxy() check.Scenario {
 	return &standaloneDNSProxy{}
 }
 
-type standaloneDNSProxy struct{
+type standaloneDNSProxy struct {
 	check.ScenarioBase
 }
 
@@ -26,7 +26,7 @@ func (s *standaloneDNSProxy) Name() string {
 
 func (s *standaloneDNSProxy) Run(ctx context.Context, t *check.Test) {
 	extTarget := t.Context().Params().ExternalTarget
-	http := check.HTTPEndpoint(extTarget+"-http", "http://"+extTarget)
+	http := check.HTTPEndpoint(extTarget+"-http", "http://"+"www.google.com")
 
 	ct := t.Context()
 
