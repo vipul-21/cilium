@@ -185,12 +185,24 @@ func ciliumEndpointMapper(endpoint *types.CiliumEndpoint) iter.Seq[store.Key] {
 					if ip == "" {
 						continue
 					}
+					var namedPorts []identity.NamedPort
+					if endpoint.NamedPorts != nil {
+						namedPorts = make([]identity.NamedPort, 0, len(endpoint.NamedPorts))
+						for _, port := range endpoint.NamedPorts {
+							namedPorts = append(namedPorts, identity.NamedPort{
+								Name:     port.Name,
+								Protocol: port.Protocol,
+								Port:     port.Port,
+							})
+						}
+					}
 					entry := identity.IPIdentityPair{
 						IP:                net.ParseIP(ip),
 						HostIP:            net.ParseIP(n.NodeIP),
 						K8sNamespace:      endpoint.Namespace,
 						K8sPodName:        endpoint.Name,
 						K8sServiceAccount: endpoint.ServiceAccount,
+						NamedPorts:        namedPorts,
 					}
 
 					if endpoint.Identity != nil {
