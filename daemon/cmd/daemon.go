@@ -246,6 +246,22 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 		return err
 	}
 
+	// Start watcher for endpoint IP --> identity mappings in key-value store.
+	// this needs to be done *after* that the ipcache map has been recreated
+	// by initMaps.
+	//
+	// When read-ceps-from-clustermesh is enabled, the watcher uses a separate
+	// kvstore client (ipcache-clustermesh-ceps) to read from the clustermesh etcd.
+	if params.IPIdentityWatcher.IsEnabled() || params.DaemonConfig.ReadCiliumEndpointFromClusterMesh {
+		go func() {
+			params.Logger.Info("Starting IP identity watcher",
+				"kvstoreEnabled", params.IPIdentityWatcher.IsEnabled(),
+				"readCEPsFromClustermesh", params.DaemonConfig.ReadCiliumEndpointFromClusterMesh,
+			)
+			params.IPIdentityWatcher.Watch(ctx)
+		}()
+	}
+
 	if err := params.IPsecAgent.StartBackgroundJobs(params.NodeHandler); err != nil {
 		params.Logger.Error("Unable to start IPsec key watcher", logfields.Error, err)
 	}

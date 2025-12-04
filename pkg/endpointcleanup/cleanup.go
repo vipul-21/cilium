@@ -74,7 +74,11 @@ func registerCleanup(p params) {
 		// instead eventually deleted when the corresponding lease expires.
 		//
 		// [1]: cilium/cilium#20350
-		p.KVStoreClient.IsEnabled() {
+		p.KVStoreClient.IsEnabled() ||
+		// Similarly, when reading CiliumEndpoints from clustermesh (centralized control plane),
+		// we don't create the CiliumEndpoint resource, so skip cleanup to avoid nil panic.
+		// CEPs in the cluster will be managed by kvstoremesh.
+		p.DaemonCfg.ReadCiliumEndpointFromClusterMesh {
 		p.Logger.Info("Init procedure to clean up stale CiliumEndpoint disabled")
 		return
 	}

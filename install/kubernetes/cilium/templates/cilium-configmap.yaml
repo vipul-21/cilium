@@ -162,6 +162,10 @@ data:
   disable-endpoint-crd: "true"
 {{- end }}
 
+{{- if .Values.clustermesh.readCiliumEndpointsFromEtcd }}
+  # Read CiliumEndpoint data from the ClusterMesh API server etcd cache.
+  read-ceps-from-clustermesh: "true"
+{{- end }}
 {{- if .Values.identityChangeGracePeriod }}
   # identity-change-grace-period is the grace period that needs to pass
   # before an endpoint that has changed its identity will start using

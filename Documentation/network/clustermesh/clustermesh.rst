@@ -282,6 +282,33 @@ mode:
 
    cilium connectivity test --context $CLUSTER1 --multi-cluster $CLUSTER2
 
+Reading Local CiliumEndpoint Data from Cluster Mesh
+===================================================
+
+Clusters that run the ClusterMesh API server can instruct the Cilium agents to
+consume the locally cached ``CiliumEndpoint`` data directly from the
+``clustermesh-apiserver`` etcd instance instead of watching the Kubernetes
+``CiliumEndpoint`` CRD. Enable this behavior by setting the Helm value
+``clustermesh.readCiliumEndpointsFromEtcd=true`` (or by adding
+``read-ceps-from-clustermesh: "true"`` to the ``cilium-config`` ConfigMap).
+
+Whenever ``clustermesh.useAPIServer=true`` the Helm chart automatically extends
+the ``cilium-clustermesh`` Secret with an entry named after ``cluster.name``.
+This entry contains the etcd client configuration that both the clustermesh
+control-plane Pods and the agents can use to talk to the local cache. The
+generated configuration points to the ``clustermesh-apiserver`` service when
+KVStoreMesh runs in ``internal`` mode, or reuses the ``etcd`` configuration when
+``kvstoreMode`` is ``external``. Enabling
+``clustermesh.readCiliumEndpointsFromEtcd`` simply instructs the agents to
+consume that local entry instead of watching the CEP CRD; no extra secret data
+is required.
+
+Environments that require custom service names, ports, IPs, or TLS material can
+override the generated entry via ``clustermesh.config.localCluster``. This
+object accepts the same ``address``/``port``/``ips``/``tls`` fields that are
+available for ``clustermesh.config.clusters`` entries and allows the local
+client configuration to be aligned with bespoke deployments.
+
 Next Steps
 ==========
 
