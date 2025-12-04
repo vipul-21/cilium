@@ -213,7 +213,7 @@ var ciliumResourceToGroupMapping = map[string]watcherInfo{
 func GetGroupsForCiliumResources(logger *slog.Logger, ciliumResources []string) ([]string, []string) {
 	ciliumGroups := make([]string, 0, len(ciliumResources))
 	waitOnlyList := make([]string, 0)
-
+	logger.Info("[Vipul] Cilium Resources:", slog.String("resources", fmt.Sprintf("%v", ciliumResources)))
 	for _, r := range ciliumResources {
 		groupInfo, ok := ciliumResourceToGroupMapping[r]
 		if !ok {
@@ -286,7 +286,8 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 		case resources.K8sAPIGroupEndpointSliceOrEndpoint:
 			k.k8sEndpointsWatcher.endpointsInit()
 		case k8sAPIGroupCiliumEndpointV2:
-			if !k.kcfg.IsEnabled() {
+			// Skip CEP watcher if either kvstore is enabled OR reading CEPs from clustermesh
+			if !k.kcfg.IsEnabled() && !option.Config.ReadCiliumEndpointFromClusterMesh {
 				k.k8sCiliumEndpointsWatcher.initCiliumEndpointOrSlices(ctx)
 			}
 		case k8sAPIGroupCiliumEndpointSliceV2Alpha1:

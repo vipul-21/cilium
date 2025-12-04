@@ -126,6 +126,7 @@ var (
 		cell.Provide(kvstoreExtraOptions),
 		kvstore.Cell(kvstore.DisabledBackendName),
 		cell.Invoke(kvstoreLocksGC),
+		cell.Provide(newClusterMeshCEPClient),
 
 		cni.Cell,
 

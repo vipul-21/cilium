@@ -600,6 +600,10 @@ const (
 	// use of the CEP CRD
 	DisableCiliumEndpointCRDName = "disable-endpoint-crd"
 
+	// ReadCiliumEndpointFromClusterMeshName toggles consuming CEP data from the
+	// ClusterMesh API server's etcd cache instead of the Kubernetes watcher.
+	ReadCiliumEndpointFromClusterMeshName = "read-ceps-from-clustermesh"
+
 	// MaxCtrlIntervalName and MaxCtrlIntervalNameEnv allow configuration
 	// of MaxControllerInterval.
 	MaxCtrlIntervalName = "max-controller-interval"
@@ -1327,6 +1331,11 @@ type DaemonConfig struct {
 
 	// DisableCiliumEndpointCRD disables the use of CiliumEndpoint CRD
 	DisableCiliumEndpointCRD bool
+
+	// ReadCiliumEndpointFromClusterMesh switches the agent to consume CEP data
+	// from the ClusterMesh API server's etcd cache while still writing CEPs via
+	// Kubernetes.
+	ReadCiliumEndpointFromClusterMesh bool
 
 	// MaxControllerInterval is the maximum value for a controller's
 	// RunInterval. Zero means unlimited.
@@ -2248,6 +2257,19 @@ func (c *DaemonConfig) validateContainerIPLocalReservedPorts() error {
 	return fmt.Errorf("Invalid comma separated list of of ranges for %s option", ContainerIPLocalReservedPorts)
 }
 
+func (c *DaemonConfig) validateReadCiliumEndpointSource() error {
+	if !c.ReadCiliumEndpointFromClusterMesh {
+		return nil
+	}
+
+	if c.DisableCiliumEndpointCRD {
+		return fmt.Errorf("%s cannot be combined with %s",
+			ReadCiliumEndpointFromClusterMeshName, DisableCiliumEndpointCRDName)
+	}
+
+	return nil
+}
+
 // Validate validates the daemon configuration
 func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 	if err := c.validateIPv6ClusterAllocCIDR(); err != nil {
@@ -2328,6 +2350,10 @@ func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 	}
 
 	if err := c.validateContainerIPLocalReservedPorts(); err != nil {
+		return err
+	}
+
+	if err := c.validateReadCiliumEndpointSource(); err != nil {
 		return err
 	}
 
@@ -2488,6 +2514,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableXDPPrefilter = vp.GetBool(EnableXDPPrefilter)
 	c.EnableTCX = vp.GetBool(EnableTCX)
 	c.DisableCiliumEndpointCRD = vp.GetBool(DisableCiliumEndpointCRDName)
+	c.ReadCiliumEndpointFromClusterMesh = vp.GetBool(ReadCiliumEndpointFromClusterMeshName)
 	c.MasqueradeInterfaces = vp.GetStringSlice(MasqueradeInterfaces)
 	c.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
 	c.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)

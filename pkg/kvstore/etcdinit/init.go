@@ -280,6 +280,7 @@ func rangesForLocalRole() []keyRange {
 		rangeForPrefix(kvstore.CachePrefix),
 		rangeForPrefix(kvstore.ClusterConfigPrefix),
 		rangeForPrefix(kvstore.SyncedPrefix),
+		rangeForPrefix(kvstore.StatePrefix), // Allow local agents to read CiliumEndpoints'
 	}
 }
 

@@ -46,7 +46,7 @@ func agentCRDResourceNames() []string {
 		CRDResourceName(v2alpha1.CPIPName),
 	}
 
-	if !option.Config.DisableCiliumEndpointCRD {
+	if !option.Config.DisableCiliumEndpointCRD && !option.Config.ReadCiliumEndpointFromClusterMesh {
 		result = append(result, CRDResourceName(v2.CEPName))
 		if option.Config.EnableCiliumEndpointSlice {
 			result = append(result, CRDResourceName(v2alpha1.CESName))

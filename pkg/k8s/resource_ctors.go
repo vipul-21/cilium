@@ -31,6 +31,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/utils"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
+	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 )
 
@@ -384,6 +385,12 @@ func transformEndpoint(logger *slog.Logger, obj any) (any, error) {
 // signature.
 func CiliumSlimEndpointResource(params CiliumResourceParams, _ *node.LocalNodeStore, mp workqueue.MetricsProvider, opts ...func(*metav1.ListOptions)) (resource.Resource[*types.CiliumEndpoint], error) {
 	if !params.ClientSet.IsEnabled() {
+		return nil, nil
+	}
+	// When reading CiliumEndpoints from clustermesh (centralized control plane),
+	// don't create the resource to avoid unnecessary watches on the API server.
+	// CEP cleanup will be skipped in this mode as well.
+	if option.Config.ReadCiliumEndpointFromClusterMesh {
 		return nil, nil
 	}
 	lw := utils.ListerWatcherWithModifiers(

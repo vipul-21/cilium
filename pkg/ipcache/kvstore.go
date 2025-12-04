@@ -139,12 +139,24 @@ func (s *IPIdentitySynchronizer) IsEnabled() bool {
 	return s.client.IsEnabled()
 }
 
+// LocalIPIdentityWatcherConfig influences how the local watcher interacts with
+// the kvstore.
+type LocalIPIdentityWatcherConfig struct {
+	DisableSelfDeletionProtection bool
+	// UseCachedPrefix instructs the watcher to consume entries from the
+	// cached clustermesh prefix instead of the standard state prefix.
+	UseCachedPrefix bool
+}
+
 // LocalIPIdentityWatcher is an IPIdentityWatcher specialized to watch the
 // entries corresponding to the local cluster.
 type LocalIPIdentityWatcher struct {
-	watcher *IPIdentityWatcher
-	syncer  *IPIdentitySynchronizer
-	client  kvstore.Client
+	watcher                *IPIdentityWatcher
+	syncer                 *IPIdentitySynchronizer
+	client                 kvstore.Client
+	selfDeletionProtection bool
+	config                 LocalIPIdentityWatcherConfig
+	policyUpdater          PolicyUpdater
 }
 
 func NewLocalIPIdentityWatcher(in struct {
@@ -153,24 +165,47 @@ func NewLocalIPIdentityWatcher(in struct {
 	Logger      *slog.Logger
 	ClusterInfo cmtypes.ClusterInfo
 	Client      kvstore.Client
+	CEPClient   kvstore.Client `name:"ipcache-clustermesh-ceps" optional:"true"`
 	Factory     storepkg.Factory
 
-	IPCache *IPCache
-	Syncer  *IPIdentitySynchronizer
+	IPCache       *IPCache
+	Syncer        *IPIdentitySynchronizer
+	Config        LocalIPIdentityWatcherConfig
+	PolicyUpdater PolicyUpdater `optional:"true"`
 }) *LocalIPIdentityWatcher {
+	selfDeletion := !in.Config.DisableSelfDeletionProtection
+	client := in.Client
+	// When reading CEPs from clustermesh, always use the CEP client,
+	// regardless of whether we're using cached or state prefix
+	if in.Config.DisableSelfDeletionProtection && in.CEPClient != nil {
+		client = in.CEPClient
+	}
 	return &LocalIPIdentityWatcher{
 		watcher: NewIPIdentityWatcher(
 			in.Logger, in.ClusterInfo.Name, in.IPCache,
 			in.Factory, source.KVStore,
 		),
-		syncer: in.Syncer,
-		client: in.Client,
+		syncer:                 in.Syncer,
+		client:                 client,
+		selfDeletionProtection: selfDeletion,
+		config:                 in.Config,
+		policyUpdater:          in.PolicyUpdater,
 	}
 }
 
 // Watch starts the watcher and blocks waiting for events, until the context is closed.
 func (liw *LocalIPIdentityWatcher) Watch(ctx context.Context) {
-	liw.watcher.Watch(ctx, liw.client, WithSelfDeletionProtection(liw.syncer))
+	var opts []IWOpt
+	if liw.selfDeletionProtection {
+		opts = append(opts, WithSelfDeletionProtection(liw.syncer))
+	}
+	if liw.config.UseCachedPrefix {
+		opts = append(opts, WithCachedPrefix(true))
+	}
+	if liw.policyUpdater != nil {
+		opts = append(opts, WithPolicyUpdater(liw.policyUpdater))
+	}
+	liw.watcher.Watch(ctx, liw.client, opts...)
 }
 
 // WaitForSync blocks until either the initial list of entries had been retrieved
@@ -186,7 +221,13 @@ func (liw *LocalIPIdentityWatcher) WaitForSync(ctx context.Context) error {
 
 // IsEnabled returns true if the synchronization from the KVStore is enabled.
 func (liw *LocalIPIdentityWatcher) IsEnabled() bool {
-	return liw.client.IsEnabled()
+	enabled := liw.client.IsEnabled()
+	liw.watcher.log.Info("LocalIPIdentityWatcher.IsEnabled() check",
+		"enabled", enabled,
+		"useCachedPrefix", liw.config.UseCachedPrefix,
+		"clientType", fmt.Sprintf("%T", liw.client),
+	)
+	return enabled
 }
 
 // IPIdentityWatcher is a watcher that will notify when IP<->identity mappings
@@ -205,6 +246,8 @@ type IPIdentityWatcher struct {
 	// Set only when withSelfDeletionProtection is true
 	syncer *IPIdentitySynchronizer
 
+	policyUpdater PolicyUpdater
+
 	started bool
 	synced  chan struct{}
 }
@@ -212,6 +255,11 @@ type IPIdentityWatcher struct {
 type IPCacher interface {
 	Upsert(ip string, hostIP net.IP, hostKey uint8, k8sMeta *K8sMetadata, newIdentity Identity) (bool, error)
 	Delete(IP string, source source.Source) (namedPortsChanged bool)
+}
+
+// PolicyUpdater is responsible for triggering policy updates when named ports change.
+type PolicyUpdater interface {
+	TriggerPolicyUpdates(reason string)
 }
 
 // NewIPIdentityWatcher creates a new IPIdentityWatcher for the given cluster.
@@ -244,6 +292,7 @@ type iwOpts struct {
 	selfDeletionProtection *IPIdentitySynchronizer
 	cachedPrefix           bool
 	validators             []ipIdentityValidator
+	policyUpdater          PolicyUpdater
 }
 
 // WithClusterID configures the ClusterID associated with the given watcher.
@@ -267,6 +316,13 @@ func WithSelfDeletionProtection(synchronizer *IPIdentitySynchronizer) IWOpt {
 func WithCachedPrefix(cached bool) IWOpt {
 	return func(opts *iwOpts) {
 		opts.cachedPrefix = cached
+	}
+}
+
+// WithPolicyUpdater sets the policy updater that will be notified when named ports change.
+func WithPolicyUpdater(updater PolicyUpdater) IWOpt {
+	return func(opts *iwOpts) {
+		opts.policyUpdater = updater
 	}
 }
 
@@ -320,11 +376,21 @@ func (iw *IPIdentityWatcher) Watch(ctx context.Context, backend storepkg.WatchSt
 		prefix = path.Join(kvstore.StateToCachePrefix(IPIdentitiesPath), iw.clusterName)
 	}
 
+	iw.log.Info(
+		"Starting IPIdentityWatcher",
+		"prefix", prefix,
+		"cluster", iw.clusterName,
+		"clusterID", iwo.clusterID,
+		"source", iw.source,
+		"cachedPrefix", iwo.cachedPrefix,
+	)
+
 	iw.started = true
 	iw.clusterID = iwo.clusterID
 	iw.withSelfDeletionProtection = iwo.selfDeletionProtection != nil
 	iw.syncer = iwo.selfDeletionProtection
 	iw.validators = iwo.validators
+	iw.policyUpdater = iwo.policyUpdater
 	iw.store.Watch(ctx, backend, prefix)
 }
 
@@ -379,8 +445,11 @@ func (iw *IPIdentityWatcher) OnUpdate(k storepkg.Key) {
 	}
 
 	iw.log.Debug(
-		"Observed upsertion event",
+		"Observed upsertion event, received IP->Identity mapping from kvstore",
 		logfields.IPAddr, ip,
+		logfields.Identity, ipIDPair.ID,
+		"cluster", iw.clusterName,
+		"source", iw.source,
 	)
 
 	for _, validator := range iw.validators {
@@ -436,10 +505,15 @@ func (iw *IPIdentityWatcher) OnUpdate(k storepkg.Key) {
 	// and the endpoint-runIPIdentitySync where it bounded to a
 	// lease and a controller which is stopped/removed when the
 	// endpoint is gone.
-	iw.ipcache.Upsert(ip, ipIDPair.HostIP, ipIDPair.Key, k8sMeta, Identity{
+	namedPortsChanged, _ := iw.ipcache.Upsert(ip, ipIDPair.HostIP, ipIDPair.Key, k8sMeta, Identity{
 		ID:     peerIdentity,
 		Source: iw.source,
 	})
+
+	// Trigger policy updates if named ports changed, similar to CEP watcher behavior
+	if namedPortsChanged && iw.policyUpdater != nil {
+		iw.policyUpdater.TriggerPolicyUpdates("Named ports added or updated from kvstore")
+	}
 }
 
 // OnDelete is triggered when a new deletion event is observed, and
@@ -457,8 +531,10 @@ func (iw *IPIdentityWatcher) OnDelete(k storepkg.NamedKey) {
 	ip := ipIDPair.PrefixString()
 
 	iw.log.Debug(
-		"Observed deletion event",
+		"Observed deletion event, Received IP->Identity deletion from kvstore",
 		logfields.IPAddr, ip,
+		"cluster", iw.clusterName,
+		"source", iw.source,
 	)
 
 	if iw.withSelfDeletionProtection && iw.selfDeletionProtection(ip) {
@@ -473,10 +549,21 @@ func (iw *IPIdentityWatcher) OnDelete(k storepkg.NamedKey) {
 	// The key no longer exists in the
 	// local cache, it is safe to remove
 	// from the datapath ipcache.
-	iw.ipcache.Delete(ip, iw.source)
+	namedPortsChanged := iw.ipcache.Delete(ip, iw.source)
+
+	// Trigger policy updates if named ports changed, similar to CEP watcher behavior
+	if namedPortsChanged && iw.policyUpdater != nil {
+		iw.policyUpdater.TriggerPolicyUpdates("Named ports deleted from kvstore")
+	}
 }
 
 func (iw *IPIdentityWatcher) onSync(context.Context) {
+	iw.log.Debug(
+		"IPIdentityWatcher synchronized",
+		"num_entries", iw.store.NumEntries(),
+		"cluster", iw.clusterName,
+		"source", iw.source,
+	)
 	close(iw.synced)
 }
 

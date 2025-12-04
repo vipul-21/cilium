@@ -1162,3 +1162,23 @@ func TestApiRateLimitValidation(t *testing.T) {
 		"endpoint-patch": "auto-adjust:true,estimated-processing-duration:200ms,rate-limit:16/s,rate-burst:32,min-parallel-requests:16,max-parallel-requests:128,log:false"
 		}`), "must accept JSON object")
 }
+
+func TestValidateReadCiliumEndpointSource(t *testing.T) {
+	t.Run("disabled", func(t *testing.T) {
+		cfg := DaemonConfig{}
+		require.NoError(t, cfg.validateReadCiliumEndpointSource())
+	})
+
+	t.Run("enabled", func(t *testing.T) {
+		cfg := DaemonConfig{ReadCiliumEndpointFromClusterMesh: true}
+		require.NoError(t, cfg.validateReadCiliumEndpointSource())
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		cfg := DaemonConfig{
+			ReadCiliumEndpointFromClusterMesh: true,
+			DisableCiliumEndpointCRD:          true,
+		}
+		require.Error(t, cfg.validateReadCiliumEndpointSource())
+	})
+}

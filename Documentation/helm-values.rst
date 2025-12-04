@@ -964,6 +964,10 @@
      - Clusters to be peered in the mesh. @schema type: [object, array] @schema
      - list
      - ``[]``
+   * - :spelling:ignore:`clustermesh.config.localCluster`
+     - Optional overrides for the automatically generated local cluster configuration that is added to ``cilium-clustermesh`` whenever ``clustermesh.useAPIServer`` is enabled. Accepts the same fields as entries under ``clustermesh.config.clusters``.
+     - object
+     - ``{}``
    * - :spelling:ignore:`clustermesh.config.domain`
      - Default dns domain for the Clustermesh API servers This is used in the case cluster addresses are not provided and IPs are used.
      - string
@@ -1068,6 +1072,10 @@
      - Control whether policy rules assume by default the local cluster if not explicitly selected
      - bool
      - ``true``
+   * - :spelling:ignore:`clustermesh.readCiliumEndpointsFromEtcd`
+     - Read local ``CiliumEndpoint`` data from the ClusterMesh API server etcd cache instead of watching the Kubernetes CRD.
+     - bool
+     - ``false``
    * - :spelling:ignore:`clustermesh.useAPIServer`
      - Deploy clustermesh-apiserver for clustermesh. This option is typically used with ``clustermesh.config.enabled=true``. Refer to the  ``clustermesh.config.enabled=true``\ documentation for more information.
      - bool

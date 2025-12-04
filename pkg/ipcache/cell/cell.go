@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/ipcache/api"
 	"github.com/cilium/cilium/pkg/k8s/synced"
+	"github.com/cilium/cilium/pkg/option"
 	policycell "github.com/cilium/cilium/pkg/policy/cell"
 )
 
@@ -27,6 +28,7 @@ var Cell = cell.Module(
 
 	cell.Provide(
 		newIPCache,
+		newLocalIPIdentityWatcherConfig,
 		ipcache.NewLocalIPIdentityWatcher,
 		ipcache.NewIPIdentitySynchronizer,
 		newIPCacheAPIHandler,
@@ -76,6 +78,31 @@ func newIPCache(params ipCacheParams) *ipcache.IPCache {
 	})
 
 	return ipc
+}
+
+type localIPIdentityWatcherConfigParams struct {
+	cell.In
+
+	Config *option.DaemonConfig `optional:"true"`
+}
+
+func newLocalIPIdentityWatcherConfig(params localIPIdentityWatcherConfigParams) ipcache.LocalIPIdentityWatcherConfig {
+	if params.Config == nil {
+		return ipcache.LocalIPIdentityWatcherConfig{}
+	}
+
+	if !params.Config.ReadCiliumEndpointFromClusterMesh {
+		return ipcache.LocalIPIdentityWatcherConfig{}
+	}
+
+	// For single-cluster mode, we read from the state prefix (cilium/state/ip/v1/default)
+	// where agents write their endpoint IP->Identity mappings.
+	// UseCachedPrefix is only needed in multi-cluster scenarios where kvstoremesh
+	// caches remote cluster data to cilium/cache/ip/v1/<cluster-name>.
+	return ipcache.LocalIPIdentityWatcherConfig{
+		DisableSelfDeletionProtection: true,
+		UseCachedPrefix:               false, // Use state prefix for single-cluster
+	}
 }
 
 type ipcacheAPIHandlerParams struct {

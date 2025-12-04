@@ -3355,6 +3355,9 @@ clustermesh:
   # used with ``clustermesh.config.enabled=true``. Refer to the 
   # ``clustermesh.config.enabled=true``documentation for more information.
   useAPIServer: false
+  # -- Read local CiliumEndpoint data from the ClusterMesh API server etcd cache
+  # instead of watching the Kubernetes CRD.
+  readCiliumEndpointsFromEtcd: false
   # -- The maximum number of clusters to support in a ClusterMesh. This value
   # cannot be changed on running clusters, and all clusters in a ClusterMesh
   # must be configured with the same value. Values > 255 will decrease the
@@ -3418,6 +3421,10 @@ clustermesh:
     #       cert: ""
     #       key: ""
     #       caCert: ""
+  # -- Optional overrides for the automatically generated local cluster configuration
+  # that is added to the cilium-clustermesh secret whenever clustermesh.useAPIServer
+  # is enabled. This accepts the same fields as entries defined under clusters.
+    localCluster: {}
     #
     # Or alternatively you can use a list of clusters:
     # clusters:
