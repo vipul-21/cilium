@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"sync/atomic"
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
@@ -21,6 +22,7 @@ import (
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/standalone-dns-proxy/api"
 	"github.com/cilium/cilium/standalone-dns-proxy/pkg/client"
 	"github.com/cilium/cilium/standalone-dns-proxy/pkg/lookup"
 	"github.com/cilium/cilium/standalone-dns-proxy/pkg/messagehandler"
@@ -47,6 +49,11 @@ var (
 		// includes the message handler for receiving messages from the proxy and sending messages to the gRPC client which in turn sends them to the cilium agent
 		messagehandler.Cell,
 
+		api.HealthHandlerCell(
+			isHealthy.Load,
+		),
+		api.Cell,
+
 		cell.Provide(func() *option.DaemonConfig {
 			return option.Config
 		}),
@@ -55,6 +62,9 @@ var (
 	)
 
 	binaryName = "standalone-dns-proxy"
+
+	// isHealthy indicates whether the standalone DNS proxy is healthy
+	isHealthy atomic.Bool
 )
 
 func NewDNSProxyCmd(h *hive.Hive) *cobra.Command {

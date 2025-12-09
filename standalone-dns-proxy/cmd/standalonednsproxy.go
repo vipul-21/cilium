@@ -68,6 +68,7 @@ func (sdp *StandaloneDNSProxy) StartStandaloneDNSProxy() error {
 		job.WithShutdown()))
 
 	sdp.logger.Info("Standalone DNS proxy started")
+	isHealthy.Store(true)
 	return nil
 }
 
@@ -131,6 +132,8 @@ func (sdp *StandaloneDNSProxy) WatchDNSRulesTable(ctx context.Context, _ cell.He
 // StopStandaloneDNSProxy stops the standalone DNS proxy and cleanup resources
 func (sdp *StandaloneDNSProxy) StopStandaloneDNSProxy() error {
 	sdp.logger.Info("Stopping standalone DNS proxy")
+
+	isHealthy.Store(false)
 
 	// Stop DNS proxy first
 	sdp.dnsProxier.Cleanup()

@@ -1,0 +1,32 @@
+---
+swagger: '2.0'
+info:
+  title: Standalone DNS Proxy
+  description: API for Standalone DNS Proxy
+  version: v1beta
+x-schemes:
+- unix
+basePath: "/v1"
+produces:
+- application/json
+consumes:
+- application/json
+paths:
+  "/healthz":
+    get:
+      summary: Get health of Standalone DNS Proxy
+      description: Returns the status of Standalone DNS Proxy instance.
+      tags:
+      - sdp
+      parameters: []
+      produces:
+      - text/plain
+      responses:
+        '200':
+          description: Standalone DNS Proxy is healthy
+          schema:
+            type: string
+        '500':
+          description: Standalone DNS Proxy is not healthy
+          schema:
+            type: string

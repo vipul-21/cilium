@@ -342,6 +342,23 @@ generate-ztunnel-api: pkg/ztunnel/pb/ca_ztunnel.proto pkg/ztunnel/pb/workload_zt
 
 generate-sdp-api: api/v1/standalone-dns-proxy/standalone-dns-proxy.proto
 	$(QUIET) $(MAKE) $(SUBMAKEOPTS) -C api/v1
+	# api/v1/standalone-dns-proxy/openapi.yaml - generate standalone-dns-proxy client/model/server from openapi spec.
+	@$(ECHO_GEN)api/v1/standalone-dns-proxy/openapi.yaml
+	$(QUIET)$(SWAGGER) generate server -s server -a restapi \
+		-t api/v1 \
+		-t api/v1/standalone-dns-proxy/ \
+		-f api/v1/standalone-dns-proxy/openapi.yaml \
+		--default-scheme=http \
+		-C api/v1/cilium-server.yml \
+		-r hack/spdx-copyright-header.txt
+	$(QUIET)$(SWAGGER) generate client -a restapi \
+		-t api/v1 \
+		-t api/v1/standalone-dns-proxy/ \
+		-f api/v1/standalone-dns-proxy/openapi.yaml \
+		-C api/v1/cilium-client.yml \
+		-r hack/spdx-copyright-header.txt
+	@# sort goimports automatically
+	$(QUIET)$(GO) run golang.org/x/tools/cmd/goimports -w ./api/v1/standalone-dns-proxy
 
 define generate_k8s_protobuf
 	$(GO) install k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo && \
