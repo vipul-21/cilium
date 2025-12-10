@@ -720,6 +720,7 @@ roadmap
 rollout
 routable
 routingMode
+rst
 runnable
 runtimes
 sandboxing
@@ -805,6 +806,7 @@ tiefighter
 tls
 toCIDR
 toCIDRSet
+toFQDN
 toFQDNs
 toGroups
 tofqdns
