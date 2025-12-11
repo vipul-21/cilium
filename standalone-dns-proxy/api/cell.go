@@ -6,16 +6,14 @@ package api
 import (
 	"github.com/cilium/hive/cell"
 	"github.com/spf13/pflag"
+
+	sdpDefaults "github.com/cilium/cilium/standalone-dns-proxy/pkg/defaults"
 )
 
 const (
-	// StandaloneDNSProxyAPIServeAddr is the "<ip>:<port>" on which to serve api requests
-	// from the standalone dns proxy.
-	StandaloneDNSProxyAPIServeAddr = "standalone-dns-proxy-api-serve-addr"
-
-	// StandaloneDNSProxyAPIServeAddrDefault is the default "<ip>:<port>" value on which to serve
-	// api requests from the standalone dns proxy.
-	StandaloneDNSProxyAPIServeAddrDefault = "localhost:9235"
+	// StandaloneDNSProxyAPISocketPath is the path to the Unix domain socket on which
+	// to serve API requests from the standalone DNS proxy.
+	StandaloneDNSProxyAPISocketPath = "standalone-dns-proxy-api-socket-path"
 )
 
 var Cell = cell.Module(
@@ -28,13 +26,16 @@ var Cell = cell.Module(
 )
 
 type Config struct {
-	StandaloneDNSProxyAPIServeAddr string
+	// StandaloneDNSProxyAPISocketPath is the path to the Unix domain socket for the API server.
+	// If empty, defaults to /var/run/cilium/standalone-dns-proxy-api.sock
+	StandaloneDNSProxyAPISocketPath string
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
-	flags.String(StandaloneDNSProxyAPIServeAddr, def.StandaloneDNSProxyAPIServeAddr, "Address to serve API requests")
+	flags.String(StandaloneDNSProxyAPISocketPath, def.StandaloneDNSProxyAPISocketPath,
+		"Path to Unix domain socket for API server")
 }
 
 var defaultConfig = Config{
-	StandaloneDNSProxyAPIServeAddr: StandaloneDNSProxyAPIServeAddrDefault,
+	StandaloneDNSProxyAPISocketPath: sdpDefaults.APISockPath,
 }

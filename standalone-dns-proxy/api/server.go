@@ -9,12 +9,12 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"syscall"
+	"os"
+	"path/filepath"
 
 	"github.com/cilium/hive/cell"
 	"github.com/go-openapi/loads"
 	"github.com/go-openapi/runtime"
-	"golang.org/x/sys/unix"
 
 	sdpApi "github.com/cilium/cilium/api/v1/standalone-dns-proxy/server"
 	"github.com/cilium/cilium/api/v1/standalone-dns-proxy/server/restapi"
@@ -42,16 +42,11 @@ type Server struct {
 	logger     *slog.Logger
 	shutdowner hive.Shutdowner
 
-	address  string
-	httpSrvs []httpServer
+	socketPath string
+	listener   net.Listener
+	server     *http.Server
 
 	healthHandler sdp.GetHealthzHandler
-}
-
-type httpServer struct {
-	address  string
-	listener net.Listener
-	server   *http.Server
 }
 
 func newServer(
@@ -60,7 +55,7 @@ func newServer(
 	server := &Server{
 		logger:        p.Logger,
 		shutdowner:    p.Shutdowner,
-		address:       p.Cfg.StandaloneDNSProxyAPIServeAddr,
+		socketPath:    p.Cfg.StandaloneDNSProxyAPISocketPath,
 		healthHandler: p.HealthHandler,
 	}
 	p.Lifecycle.Append(server)
@@ -94,92 +89,58 @@ func (s *Server) Start(ctx cell.HookContext) error {
 		resp.WriteResponse(rw, runtime.TextProducer())
 	})
 
-	if s.address == "" {
-		s.httpSrvs = make([]httpServer, 2)
-		s.httpSrvs[0].address = "127.0.0.1:0"
-		s.httpSrvs[1].address = "[::1]:0"
-	} else {
-		s.httpSrvs = make([]httpServer, 1)
-		s.httpSrvs[0].address = s.address
+	// Ensure the directory exists
+	if err := os.MkdirAll(filepath.Dir(s.socketPath), 0755); err != nil {
+		return fmt.Errorf("failed to create socket directory: %w", err)
 	}
 
-	var errs []error
-	for i := range s.httpSrvs {
-		lc := net.ListenConfig{Control: setsockoptReuseAddrAndPort}
-		ln, err := lc.Listen(ctx, "tcp", s.httpSrvs[i].address)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("unable to listen on %s: %w", s.httpSrvs[i].address, err))
-			continue
+	// Remove existing socket file if it exists
+	if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove existing socket: %w", err)
+	}
+
+	// Create Unix domain socket listener
+	ln, err := net.Listen("unix", s.socketPath)
+	if err != nil {
+		return fmt.Errorf("unable to listen on %s: %w", s.socketPath, err)
+	}
+	s.listener = ln
+
+	// Set socket permissions to allow local access
+	if err := os.Chmod(s.socketPath, 0660); err != nil {
+		ln.Close()
+		return fmt.Errorf("failed to set socket permissions: %w", err)
+	}
+
+	s.logger.Info("API server listening on Unix domain socket", logfields.Path, s.socketPath)
+
+	s.server = &http.Server{
+		Handler: mux,
+	}
+
+	go func() {
+		if err := s.server.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
+			s.logger.Error("HTTP server stopped with error", logfields.Error, err)
+			s.shutdowner.Shutdown()
 		}
-		s.httpSrvs[i].listener = ln
-
-		s.logger.Debug("Listening on", logfields.Address, ln.Addr().String())
-
-		s.httpSrvs[i].server = &http.Server{
-			Addr:    s.httpSrvs[i].address,
-			Handler: mux,
-		}
-	}
-
-	// if no server can be started, we stop the cell
-	if (len(s.httpSrvs) == 1 && s.httpSrvs[0].server == nil) ||
-		(len(s.httpSrvs) == 2 && s.httpSrvs[0].server == nil && s.httpSrvs[1].server == nil) {
-		s.shutdowner.Shutdown()
-		return errors.Join(errs...)
-	}
-
-	// otherwise just log any possible error and continue
-	for _, err := range errs {
-		s.logger.Error("Failed to start server", logfields.Error, err)
-	}
-
-	for _, srv := range s.httpSrvs {
-		if srv.server == nil {
-			continue
-		}
-		go func(srv httpServer) {
-			if err := srv.server.Serve(srv.listener); !errors.Is(err, http.ErrServerClosed) {
-				s.logger.Error("HTTP server stopped with error", logfields.Error, err)
-				s.shutdowner.Shutdown()
-			}
-		}(srv)
-	}
+	}()
 
 	return nil
 }
 
 func (s *Server) Stop(ctx cell.HookContext) error {
-	for _, srv := range s.httpSrvs {
-		if srv.server == nil {
-			continue
-		}
-		if err := srv.server.Shutdown(ctx); err != nil {
+	if s.server != nil {
+		if err := s.server.Shutdown(ctx); err != nil {
 			return err
 		}
 	}
-	return nil
-}
 
-// setsockoptReuseAddrAndPort sets the SO_REUSEADDR and SO_REUSEPORT socket options on c's
-// underlying socket in order to improve the chance to re-bind to the same address and port
-// upon restart.
-func setsockoptReuseAddrAndPort(network, address string, c syscall.RawConn) error {
-	var soerr error
-	if err := c.Control(func(su uintptr) {
-		s := int(su)
-		// Allow reuse of recently-used addresses. This socket option is
-		// set by default on listeners in Go's net package, see
-		// net setDefaultListenerSockopts
-		if err := unix.SetsockoptInt(s, unix.SOL_SOCKET, unix.SO_REUSEADDR, 1); err != nil {
-			soerr = fmt.Errorf("failed to setsockopt(SO_REUSEADDR): %w", err)
-			return
+	// Clean up socket file
+	if s.socketPath != "" {
+		if err := os.Remove(s.socketPath); err != nil && !os.IsNotExist(err) {
+			s.logger.Warn("Failed to remove socket file", logfields.Path, s.socketPath, logfields.Error, err)
 		}
-
-		// Allow reuse of recently-used ports. This gives the standalone dnsproxy a
-		// better chance to re-bind upon restarts.
-		soerr = unix.SetsockoptInt(s, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
-	}); err != nil {
-		return err
 	}
-	return soerr
+
+	return nil
 }
