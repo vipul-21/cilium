@@ -280,8 +280,8 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 				k.k8sCiliumNodeWatcher.ciliumNodeInit(ctx)
 			}
 		case k8sAPIGroupCiliumEndpointV2:
-			// Skip CEP watcher if either kvstore is enabled OR reading CEPs from clustermesh
-			if !k.kcfg.IsEnabled() && !option.Config.ReadCiliumEndpointFromClusterMesh {
+			// Skip CEP/CES watcher if either kvstore is enabled OR reading CEPs/CES from clustermesh
+			if !k.kcfg.IsEnabled() && !option.Config.ReadCiliumEndpointFromClusterMesh && !option.Config.ReadCiliumEndpointSliceFromClusterMesh {
 				k.k8sCiliumEndpointsWatcher.initCiliumEndpointOrSlices(ctx)
 			}
 		case k8sAPIGroupCiliumEndpointSliceV2Alpha1:
