@@ -1015,7 +1015,8 @@ func (e *Endpoint) FormatGlobalEndpointID() string {
 // This synchronizes the key-value store with a mapping of the endpoint's IP
 // with the numerical ID representing its security identity.
 func (e *Endpoint) runIPIdentitySync(endpointIP netip.Addr) {
-	if option.Config.ReadCiliumEndpointFromClusterMesh || !e.kvstoreSyncher.IsEnabled() || !endpointIP.IsValid() {
+	// Skip kvstore sync if reading CEP or CES from clustermesh etcd - the data is already synced by clustermesh
+	if option.Config.ReadCiliumEndpointFromClusterMesh || option.Config.ReadCiliumEndpointSliceFromClusterMesh || !e.kvstoreSyncher.IsEnabled() || !endpointIP.IsValid() {
 		return
 	}
 

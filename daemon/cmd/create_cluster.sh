@@ -108,6 +108,7 @@ for unique in $suffixes; do
         --set ipam.mode=delegated-plugin \
         --set routingMode=native \
         --set endpointRoutes.enabled=true \
+        --set enable-cilium-endpoint-slice=true \
         --set enable-ipv4=true \
         --set enableIPv4Masquerade=false \
         --set kubeProxyReplacement=true \

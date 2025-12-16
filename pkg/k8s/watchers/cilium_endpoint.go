@@ -83,6 +83,14 @@ type K8sCiliumEndpointsWatcher struct {
 
 // initCiliumEndpointOrSlices initializes the ciliumEndpoints or ciliumEndpointSlice
 func (k *K8sCiliumEndpointsWatcher) initCiliumEndpointOrSlices(ctx context.Context) {
+	// Skip K8s watchers if reading CEP or CES from clustermesh - data comes from etcd instead
+	if option.Config.ReadCiliumEndpointFromClusterMesh || option.Config.ReadCiliumEndpointSliceFromClusterMesh {
+		k.logger.Info("Skipping K8s watcher initialization - reading from clustermesh",
+			"readCEPsFromClustermesh", option.Config.ReadCiliumEndpointFromClusterMesh,
+			"readCESFromClustermesh", option.Config.ReadCiliumEndpointSliceFromClusterMesh)
+		return
+	}
+
 	// If CiliumEndpointSlice feature is enabled, Cilium-agent watches CiliumEndpointSlice
 	// objects instead of CiliumEndpoints. Hence, skip watching CiliumEndpoints if CiliumEndpointSlice
 	// feature is enabled.

@@ -440,8 +440,18 @@ func ciliumEndpointLocalPodIndexFunc(logger *slog.Logger, obj any) ([]string, er
 // signature.
 func CiliumEndpointSliceResource(params CiliumResourceParams, _ *node.LocalNodeStore, mp workqueue.MetricsProvider, opts ...func(*metav1.ListOptions)) (resource.Resource[*cilium_api_v2alpha1.CiliumEndpointSlice], error) {
 	if !params.ClientSet.IsEnabled() {
+		params.Logger.Info("CiliumEndpointSliceResource: ClientSet not enabled, returning nil")
 		return nil, nil
 	}
+	// When reading CiliumEndpointSlices from clustermesh (centralized control plane),
+	// don't create the resource to avoid unnecessary watches on the API server.
+	if option.Config.ReadCiliumEndpointSliceFromClusterMesh {
+		params.Logger.Info("CiliumEndpointSliceResource: ReadCiliumEndpointSliceFromClusterMesh is TRUE, returning nil - no K8s watch will be created")
+		return nil, nil
+	}
+	params.Logger.Info("CiliumEndpointSliceResource: Creating K8s watch resource",
+		"readCESFromClustermesh", option.Config.ReadCiliumEndpointSliceFromClusterMesh,
+		"enableCES", option.Config.EnableCiliumEndpointSlice)
 	lw := utils.ListerWatcherWithModifiers(
 		utils.ListerWatcherFromTyped[*cilium_api_v2alpha1.CiliumEndpointSliceList](params.ClientSet.CiliumV2alpha1().CiliumEndpointSlices()),
 		opts...,

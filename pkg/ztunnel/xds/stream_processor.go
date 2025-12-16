@@ -158,31 +158,35 @@ func (es *EndpointSource) handleCESDelete(ces *v2alpha1.CiliumEndpointSlice, ces
 
 func (es *EndpointSource) SubscribeToEndpointEvents(ctx context.Context, wg *sync.WaitGroup) {
 	if option.Config.EnableCiliumEndpointSlice {
-		newSliceEvents := es.k8sCiliumEndpointsWatcher.GetCiliumEndpointSliceResource().Events(ctx, resource.WithErrorHandler(resource.AlwaysRetry))
-		// Keep track of CEPs in each CES to detect deletions on updates
-		cesCache := make(map[resource.Key]map[string]*types.CiliumEndpoint)
+		cesResource := es.k8sCiliumEndpointsWatcher.GetCiliumEndpointSliceResource()
+		// If CES resource is nil (reading from clustermesh etcd), fall back to CEP watching
+		if cesResource != nil {
+			newSliceEvents := cesResource.Events(ctx, resource.WithErrorHandler(resource.AlwaysRetry))
+			// Keep track of CEPs in each CES to detect deletions on updates
+			cesCache := make(map[resource.Key]map[string]*types.CiliumEndpoint)
 
-		for e := range newSliceEvents {
-			if e.Kind == resource.Sync {
-				wg.Done()
+			for e := range newSliceEvents {
+				if e.Kind == resource.Sync {
+					wg.Done()
+					e.Done(nil)
+					continue
+				}
+				if e.Object == nil {
+					e.Done(nil)
+					continue
+				}
+
+				switch e.Kind {
+				case resource.Upsert:
+					es.handleCESUpsert(e.Object, cesCache, e.Key)
+				case resource.Delete:
+					es.handleCESDelete(e.Object, cesCache, e.Key)
+				}
+
 				e.Done(nil)
-				continue
 			}
-			if e.Object == nil {
-				e.Done(nil)
-				continue
-			}
-
-			switch e.Kind {
-			case resource.Upsert:
-				es.handleCESUpsert(e.Object, cesCache, e.Key)
-			case resource.Delete:
-				es.handleCESDelete(e.Object, cesCache, e.Key)
-			}
-
-			e.Done(nil)
+			return
 		}
-		return
 	}
 
 	// TODO(hemanthmalla): How should retries be configured here ?
@@ -209,19 +213,23 @@ func (es *EndpointSource) SubscribeToEndpointEvents(ctx context.Context, wg *syn
 func (es *EndpointSource) ListAllEndpoints(ctx context.Context) ([]*types.CiliumEndpoint, error) {
 	eps := []*types.CiliumEndpoint{}
 	if option.Config.EnableCiliumEndpointSlice {
-		cesStore, err := es.k8sCiliumEndpointsWatcher.GetCiliumEndpointSliceResource().Store(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get CiliumEndpointSlice store from K8sCiliumEndpointsWatcher: %w", err)
-		}
-		slices := cesStore.List()
-
-		for _, s := range slices {
-			for _, ep := range s.Endpoints {
-				cep := k8s.ConvertCoreCiliumEndpointToTypesCiliumEndpoint(&ep, s.Namespace)
-				eps = append(eps, cep)
+		cesResource := es.k8sCiliumEndpointsWatcher.GetCiliumEndpointSliceResource()
+		// If CES resource is nil (reading from clustermesh etcd), fall back to CEP
+		if cesResource != nil {
+			cesStore, err := cesResource.Store(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get CiliumEndpointSlice store from K8sCiliumEndpointsWatcher: %w", err)
 			}
+			slices := cesStore.List()
+
+			for _, s := range slices {
+				for _, ep := range s.Endpoints {
+					cep := k8s.ConvertCoreCiliumEndpointToTypesCiliumEndpoint(&ep, s.Namespace)
+					eps = append(eps, cep)
+				}
+			}
+			return eps, nil
 		}
-		return eps, nil
 	}
 
 	cepStore, err := es.k8sCiliumEndpointsWatcher.GetCiliumEndpointResource().Store(ctx)

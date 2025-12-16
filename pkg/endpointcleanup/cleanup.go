@@ -75,10 +75,11 @@ func registerCleanup(p params) {
 		//
 		// [1]: cilium/cilium#20350
 		p.KVStoreClient.IsEnabled() ||
-		// Similarly, when reading CiliumEndpoints from clustermesh (centralized control plane),
-		// we don't create the CiliumEndpoint resource, so skip cleanup to avoid nil panic.
-		// CEPs in the cluster will be managed by kvstoremesh.
-		p.DaemonCfg.ReadCiliumEndpointFromClusterMesh {
+		// Similarly, when reading CiliumEndpoints or CiliumEndpointSlices from clustermesh
+		// (centralized control plane), we don't create the CiliumEndpoint resource,
+		// so skip cleanup to avoid nil panic. CEPs in the cluster will be managed by kvstoremesh.
+		p.DaemonCfg.ReadCiliumEndpointFromClusterMesh ||
+		p.DaemonCfg.ReadCiliumEndpointSliceFromClusterMesh {
 		p.Logger.Info("Init procedure to clean up stale CiliumEndpoint disabled")
 		return
 	}

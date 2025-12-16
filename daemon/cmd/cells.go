@@ -126,6 +126,7 @@ var (
 		cell.Provide(kvstoreExtraOptions),
 		kvstore.Cell(kvstore.DisabledBackendName),
 		cell.Invoke(kvstoreLocksGC),
+		// Provides clustermesh client for reading CEP or CES data from etcd
 		cell.Provide(newClusterMeshCEPClient),
 
 		cni.Cell,

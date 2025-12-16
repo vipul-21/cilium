@@ -281,6 +281,9 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.ReadCiliumEndpointFromClusterMeshName, false, "Read CiliumEndpoint data from ClusterMesh API server etcd instead of watching the CRD")
 	option.BindEnv(vp, option.ReadCiliumEndpointFromClusterMeshName)
 
+	flags.Bool(option.ReadCiliumEndpointSliceFromClusterMeshName, false, "Read CiliumEndpointSlice data from ClusterMesh API server etcd instead of watching the CRD")
+	option.BindEnv(vp, option.ReadCiliumEndpointSliceFromClusterMeshName)
+
 	flags.StringSlice(option.MasqueradeInterfaces, []string{}, "Limit iptables-based egress masquerading to interfaces selector")
 	option.BindEnv(vp, option.MasqueradeInterfaces)
 

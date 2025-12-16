@@ -604,6 +604,10 @@ const (
 	// ClusterMesh API server's etcd cache instead of the Kubernetes watcher.
 	ReadCiliumEndpointFromClusterMeshName = "read-ceps-from-clustermesh"
 
+	// ReadCiliumEndpointSliceFromClusterMeshName toggles consuming CES data from the
+	// ClusterMesh API server's etcd cache instead of the Kubernetes watcher.
+	ReadCiliumEndpointSliceFromClusterMeshName = "read-ces-from-clustermesh"
+
 	// MaxCtrlIntervalName and MaxCtrlIntervalNameEnv allow configuration
 	// of MaxControllerInterval.
 	MaxCtrlIntervalName = "max-controller-interval"
@@ -1336,6 +1340,10 @@ type DaemonConfig struct {
 	// from the ClusterMesh API server's etcd cache while still writing CEPs via
 	// Kubernetes.
 	ReadCiliumEndpointFromClusterMesh bool
+
+	// ReadCiliumEndpointSliceFromClusterMesh switches the agent to consume CES data
+	// from the ClusterMesh API server's etcd cache instead of watching the Kubernetes API.
+	ReadCiliumEndpointSliceFromClusterMesh bool
 
 	// MaxControllerInterval is the maximum value for a controller's
 	// RunInterval. Zero means unlimited.
@@ -2270,6 +2278,29 @@ func (c *DaemonConfig) validateReadCiliumEndpointSource() error {
 	return nil
 }
 
+func (c *DaemonConfig) validateReadCiliumEndpointSliceSource() error {
+	if !c.ReadCiliumEndpointSliceFromClusterMesh {
+		return nil
+	}
+
+	if !c.EnableCiliumEndpointSlice {
+		return fmt.Errorf("%s requires %s to be enabled",
+			ReadCiliumEndpointSliceFromClusterMeshName, EnableCiliumEndpointSlice)
+	}
+
+	// CES and CEP clustermesh modes are mutually exclusive
+	if c.ReadCiliumEndpointFromClusterMesh {
+		return fmt.Errorf("%s and %s cannot be enabled at the same time",
+			ReadCiliumEndpointSliceFromClusterMeshName, ReadCiliumEndpointFromClusterMeshName)
+	}
+
+	// Note: We don't check DisableCiliumEndpointCRD here because EnableCiliumEndpointSlice
+	// already requires CEP CRDs to be enabled (checked at line 2887).
+	// CES is built from batching CEP resources, so CEP CRDs must exist.
+
+	return nil
+}
+
 // Validate validates the daemon configuration
 func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 	if err := c.validateIPv6ClusterAllocCIDR(); err != nil {
@@ -2354,6 +2385,10 @@ func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 	}
 
 	if err := c.validateReadCiliumEndpointSource(); err != nil {
+		return err
+	}
+
+	if err := c.validateReadCiliumEndpointSliceSource(); err != nil {
 		return err
 	}
 
@@ -2515,6 +2550,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableTCX = vp.GetBool(EnableTCX)
 	c.DisableCiliumEndpointCRD = vp.GetBool(DisableCiliumEndpointCRDName)
 	c.ReadCiliumEndpointFromClusterMesh = vp.GetBool(ReadCiliumEndpointFromClusterMeshName)
+	c.ReadCiliumEndpointSliceFromClusterMesh = vp.GetBool(ReadCiliumEndpointSliceFromClusterMeshName)
 	c.MasqueradeInterfaces = vp.GetStringSlice(MasqueradeInterfaces)
 	c.BPFSocketLBHostnsOnly = vp.GetBool(BPFSocketLBHostnsOnly)
 	c.EnableSocketLBTracing = vp.GetBool(EnableSocketLBTracing)

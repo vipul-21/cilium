@@ -91,7 +91,7 @@ func newLocalIPIdentityWatcherConfig(params localIPIdentityWatcherConfigParams) 
 		return ipcache.LocalIPIdentityWatcherConfig{}
 	}
 
-	if !params.Config.ReadCiliumEndpointFromClusterMesh {
+	if !params.Config.ReadCiliumEndpointFromClusterMesh && !params.Config.ReadCiliumEndpointSliceFromClusterMesh {
 		return ipcache.LocalIPIdentityWatcherConfig{}
 	}
 
