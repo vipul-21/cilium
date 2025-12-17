@@ -269,7 +269,7 @@ EOF
             --set clustermesh.config.localCluster.tls.caCert="${LOCAL_CA_CRT}" \
             --set clustermesh.config.localCluster.tls.key="${LOCAL_CLIENT_KEY}" \
             --set clustermesh.config.localCluster.tls.cert="${LOCAL_CLIENT_CRT}" \
-            --set clustermesh.readCiliumEndpointsFromEtcd=true
+            --set clustermesh.readCiliumEndpointSlicesFromEtcd=true
 
         echo ""
         echo "[STEP 11/${clusters}] Restarting Cilium agents"

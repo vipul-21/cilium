@@ -1489,6 +1489,9 @@
             },
             "enabled": {
               "type": "boolean"
+            },
+            "localCluster": {
+              "type": "object"
             }
           },
           "type": "object"
@@ -1582,6 +1585,12 @@
           "type": "object"
         },
         "policyDefaultLocalCluster": {
+          "type": "boolean"
+        },
+        "readCiliumEndpointSlicesFromEtcd": {
+          "type": "boolean"
+        },
+        "readCiliumEndpointsFromEtcd": {
           "type": "boolean"
         },
         "useAPIServer": {
