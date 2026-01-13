@@ -5407,7 +5407,7 @@
         "unmanagedPodWatcher": {
           "properties": {
             "intervalSeconds": {
-              "type": "integer"
+              "type": "string"
             },
             "restart": {
               "type": "boolean"
