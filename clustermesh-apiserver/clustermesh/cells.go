@@ -11,9 +11,7 @@ import (
 	cmk8s "github.com/cilium/cilium/clustermesh-apiserver/clustermesh/k8s"
 	"github.com/cilium/cilium/clustermesh-apiserver/option"
 	"github.com/cilium/cilium/clustermesh-apiserver/syncstate"
-	operatorWatchers "github.com/cilium/cilium/operator/watchers"
 	clustercfgcell "github.com/cilium/cilium/pkg/clustermesh/clustercfg/cell"
-	"github.com/cilium/cilium/pkg/clustermesh/mcsapi"
 	mcsapitypes "github.com/cilium/cilium/pkg/clustermesh/mcsapi/types"
 	cmnamespace "github.com/cilium/cilium/pkg/clustermesh/namespace"
 	"github.com/cilium/cilium/pkg/defaults"
@@ -22,7 +20,6 @@ import (
 	cilium_api_v2a1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/synced"
-	"github.com/cilium/cilium/pkg/k8s/types"
 	"github.com/cilium/cilium/pkg/kvstore/heartbeat"
 	"github.com/cilium/cilium/pkg/pprof"
 )
@@ -74,49 +71,10 @@ var Synchronization = cell.Module(
 
 	cell.Group(
 		cell.Provide(
-			func(syncState syncstate.SyncState) operatorWatchers.ServiceSyncConfig {
-				return operatorWatchers.ServiceSyncConfig{
-					Enabled: true,
-					Synced:  syncState.WaitForResource(),
-				}
-			},
-		),
-		operatorWatchers.ServiceSyncCell,
-	),
-
-	cell.Group(
-		cell.Provide(
-			func(syncState syncstate.SyncState) mcsapi.ServiceExportSyncCallback {
-				return syncState.WaitForResource()
-			},
-		),
-		mcsapi.ServiceExportSyncCell,
-	),
-
-	cell.Group(
-		cell.Provide(
 			newCiliumNodeOptions,
 			newCiliumNodeConverter,
 		),
 		cell.Invoke(RegisterSynchronizer[*cilium_api_v2.CiliumNode]),
-	),
-
-	cell.Group(
-		cell.Provide(
-			newCiliumIdentityOptions,
-			newCiliumIdentityConverter,
-			newCiliumIdentityNamespacer,
-		),
-		cell.Invoke(RegisterSynchronizer[*cilium_api_v2.CiliumIdentity]),
-	),
-
-	cell.Group(
-		cell.Provide(
-			newCiliumEndpointOptions,
-			newCiliumEndpointConverter,
-			newCiliumEndpointNamespacer,
-		),
-		cell.Invoke(RegisterSynchronizer[*types.CiliumEndpoint]),
 	),
 
 	cell.Group(

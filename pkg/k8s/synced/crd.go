@@ -109,8 +109,7 @@ func AgentCRDResourceNames() []string {
 func ClusterMeshAPIServerResourceNames() []string {
 	return []string{
 		CRDResourceName(v2.CNName),
-		CRDResourceName(v2.CIDName),
-		CRDResourceName(v2.CEPName),
+		CRDResourceName(v2alpha1.CESName),
 	}
 }
 
