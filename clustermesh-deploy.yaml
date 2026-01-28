@@ -1,0 +1,343 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    meta.helm.sh/release-name: cilium
+    meta.helm.sh/release-namespace: kube-system
+  creationTimestamp: "2026-01-28T20:50:17Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: clustermesh-apiserver
+    app.kubernetes.io/part-of: cilium
+    k8s-app: clustermesh-apiserver
+  name: clustermesh-apiserver
+  namespace: kube-system
+  resourceVersion: "2045"
+  uid: 25acd32d-8955-4a60-a0bc-8edaaf0ef1e9
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      k8s-app: clustermesh-apiserver
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: apiserver
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/name: clustermesh-apiserver
+        app.kubernetes.io/part-of: cilium
+        k8s-app: clustermesh-apiserver
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  k8s-app: clustermesh-apiserver
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      automountServiceAccountToken: true
+      containers:
+      - args:
+        - --data-dir=/var/run/etcd
+        - --name=clustermesh-apiserver
+        - --client-cert-auth
+        - --trusted-ca-file=/var/lib/etcd-secrets/ca.crt
+        - --cert-file=/var/lib/etcd-secrets/tls.crt
+        - --key-file=/var/lib/etcd-secrets/tls.key
+        - --listen-client-urls=https://0.0.0.0:2379
+        - --advertise-client-urls=https://localhost:2379
+        - --initial-cluster-token=$(INITIAL_CLUSTER_TOKEN)
+        - --auto-compaction-retention=1
+        - --listen-metrics-urls=http://0.0.0.0:9963
+        - --metrics=basic
+        command:
+        - /usr/bin/etcd
+        env:
+        - name: ETCDCTL_API
+          value: "3"
+        - name: INITIAL_CLUSTER_TOKEN
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.uid
+        image: acnpublic.azurecr.io/cilium/clustermesh-apiserver:test2
+        imagePullPolicy: Always
+        name: etcd
+        ports:
+        - containerPort: 2379
+          name: etcd
+          protocol: TCP
+        - containerPort: 9963
+          name: etcd-metrics
+          protocol: TCP
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/lib/etcd-secrets
+          name: etcd-server-secrets
+          readOnly: true
+        - mountPath: /var/run/etcd
+          name: etcd-data-dir
+      - args:
+        - clustermesh
+        - --cluster-name=$(CLUSTER_NAME)
+        - --cluster-id=$(CLUSTER_ID)
+        - --kvstore-opt=etcd.config=/var/lib/cilium/etcd-config.yaml
+        - --kvstore-opt=etcd.qps=20
+        - --kvstore-opt=etcd.bootstrapQps=10000
+        - --max-connected-clusters=255
+        - --health-port=9880
+        - --cluster-users-enabled
+        - --cluster-users-config-path=/var/lib/cilium/etcd-config/users.yaml
+        - --prometheus-serve-addr=:9962
+        - --controller-group-metrics=all
+        command:
+        - /usr/bin/clustermesh-apiserver
+        env:
+        - name: CLUSTER_NAME
+          valueFrom:
+            configMapKeyRef:
+              key: cluster-name
+              name: cilium-config
+        - name: CLUSTER_ID
+          valueFrom:
+            configMapKeyRef:
+              key: cluster-id
+              name: cilium-config
+              optional: true
+        - name: ENABLE_K8S_ENDPOINT_SLICE
+          valueFrom:
+            configMapKeyRef:
+              key: enable-k8s-endpoint-slice
+              name: cilium-config
+              optional: true
+        image: acnpublic.azurecr.io/cilium/clustermesh-apiserver:test2
+        imagePullPolicy: Always
+        name: apiserver
+        ports:
+        - containerPort: 9880
+          name: apiserv-health
+          protocol: TCP
+        - containerPort: 9962
+          name: apiserv-metrics
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: apiserv-health
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/lib/cilium/etcd-secrets
+          name: etcd-admin-client
+          readOnly: true
+        - mountPath: /var/lib/cilium/etcd-config
+          name: etcd-users-config
+          readOnly: true
+      - args:
+        - kvstoremesh
+        - --cluster-name=$(CLUSTER_NAME)
+        - --cluster-id=$(CLUSTER_ID)
+        - --kvstore-opt=etcd.config=/var/lib/cilium/etcd-config.yaml
+        - --kvstore-opt=etcd.qps=100
+        - --kvstore-opt=etcd.bootstrapQps=10000
+        - --kvstore-opt=etcd.maxInflight=10
+        - --clustermesh-config=/var/lib/cilium/clustermesh
+        - --max-connected-clusters=255
+        - --clustermesh-cache-ttl=0s
+        - --health-port=9881
+        - --prometheus-serve-addr=:9964
+        - --controller-group-metrics=all
+        - --enable-heartbeat=false
+        command:
+        - /usr/bin/clustermesh-apiserver
+        env:
+        - name: CLUSTER_NAME
+          valueFrom:
+            configMapKeyRef:
+              key: cluster-name
+              name: cilium-config
+        - name: CLUSTER_ID
+          valueFrom:
+            configMapKeyRef:
+              key: cluster-id
+              name: cilium-config
+        image: acnpublic.azurecr.io/cilium/clustermesh-apiserver:test2
+        imagePullPolicy: Always
+        name: kvstoremesh
+        ports:
+        - containerPort: 9881
+          name: kvmesh-health
+          protocol: TCP
+        - containerPort: 9964
+          name: kvmesh-metrics
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: kvmesh-health
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/lib/cilium/etcd-secrets
+          name: etcd-admin-client
+          readOnly: true
+        - mountPath: /var/lib/cilium/clustermesh
+          name: kvstoremesh-secrets
+          readOnly: true
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      initContainers:
+      - args:
+        - etcdinit
+        - --etcd-cluster-name=clustermesh-apiserver
+        - --etcd-initial-cluster-token=$(INITIAL_CLUSTER_TOKEN)
+        - --etcd-data-dir=/var/run/etcd
+        command:
+        - /usr/bin/clustermesh-apiserver
+        env:
+        - name: CILIUM_CLUSTER_NAME
+          valueFrom:
+            configMapKeyRef:
+              key: cluster-name
+              name: cilium-config
+        - name: INITIAL_CLUSTER_TOKEN
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.uid
+        image: acnpublic.azurecr.io/cilium/clustermesh-apiserver:test2
+        imagePullPolicy: Always
+        name: etcd-init
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/run/etcd
+          name: etcd-data-dir
+      nodeSelector:
+        kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 65532
+        runAsGroup: 65532
+        runAsNonRoot: true
+        runAsUser: 65532
+      serviceAccount: clustermesh-apiserver
+      serviceAccountName: clustermesh-apiserver
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: etcd-server-secrets
+        projected:
+          defaultMode: 256
+          sources:
+          - secret:
+              items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+              name: clustermesh-apiserver-server-cert
+      - name: etcd-admin-client
+        projected:
+          defaultMode: 256
+          sources:
+          - secret:
+              items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              - key: ca.crt
+                path: ca.crt
+              name: clustermesh-apiserver-admin-cert
+      - configMap:
+          defaultMode: 256
+          name: clustermesh-remote-users
+        name: etcd-users-config
+      - emptyDir: {}
+        name: etcd-data-dir
+      - name: kvstoremesh-secrets
+        projected:
+          defaultMode: 256
+          sources:
+          - secret:
+              name: cilium-kvstoremesh
+              optional: true
+          - secret:
+              items:
+              - key: tls.key
+                path: common-etcd-client.key
+              - key: tls.crt
+                path: common-etcd-client.crt
+              - key: ca.crt
+                path: common-etcd-client-ca.crt
+              name: clustermesh-apiserver-remote-cert
+              optional: true
+status:
+  conditions:
+  - lastTransitionTime: "2026-01-28T20:50:17Z"
+    lastUpdateTime: "2026-01-28T20:50:17Z"
+    message: Deployment does not have minimum availability.
+    reason: MinimumReplicasUnavailable
+    status: "False"
+    type: Available
+  - lastTransitionTime: "2026-01-28T21:00:17Z"
+    lastUpdateTime: "2026-01-28T21:00:17Z"
+    message: ReplicaSet "clustermesh-apiserver-74bcd5c75b" has timed out progressing.
+    reason: ProgressDeadlineExceeded
+    status: "False"
+    type: Progressing
+  observedGeneration: 1
+  replicas: 1
+  unavailableReplicas: 1
+  updatedReplicas: 1

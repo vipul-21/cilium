@@ -3687,6 +3687,12 @@ clustermesh:
     podAnnotations: {}
     # -- Labels to be added to clustermesh-apiserver pods
     podLabels: {}
+    # -- Deploy clustermesh-apiserver pods with hostNetwork enabled
+    hostNetwork: false
+    # -- DNS policy for clustermesh-apiserver pods.
+    # When hostNetwork is enabled, use "ClusterFirstWithHostNet" for proper DNS resolution.
+    # Ref: https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy
+    dnsPolicy: ""
     # PodDisruptionBudget settings
     podDisruptionBudget:
       # -- enable PodDisruptionBudget
