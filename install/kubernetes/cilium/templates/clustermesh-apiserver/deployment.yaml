@@ -56,6 +56,12 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.clustermesh.apiserver.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      {{- if .Values.clustermesh.apiserver.dnsPolicy }}
+      dnsPolicy: {{ .Values.clustermesh.apiserver.dnsPolicy }}
+      {{- end }}
       {{- with .Values.clustermesh.apiserver.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
