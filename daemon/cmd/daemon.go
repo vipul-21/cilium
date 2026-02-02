@@ -157,6 +157,30 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 			return fmt.Errorf("unable to connect to get node spec from apiserver: %w", err)
 		}
 
+		// When reading from clustermesh, wait for the node watcher to be ready
+		// so that we can receive node information from clustermesh etcd.
+		if params.DaemonConfig.ReadCiliumEndpointSliceFromClusterMesh && params.NodeWatcherReady != nil {
+			params.Logger.Info("Waiting for clustermesh node watcher to be ready")
+			select {
+			case <-params.NodeWatcherReady:
+				params.Logger.Info("Clustermesh node watcher is ready")
+			case <-ctx.Done():
+				return fmt.Errorf("context cancelled while waiting for clustermesh node watcher: %w", ctx.Err())
+			}
+		}
+
+		// When reading from clustermesh, also wait for our local node data to be received
+		// from clustermesh etcd. This ensures IPAM is configured correctly before proceeding.
+		if params.DaemonConfig.ReadCiliumEndpointSliceFromClusterMesh && params.LocalNodeReady != nil {
+			params.Logger.Info("Waiting for local node data from clustermesh")
+			select {
+			case <-params.LocalNodeReady:
+				params.Logger.Info("Local node data received from clustermesh")
+			case <-ctx.Done():
+				return fmt.Errorf("context cancelled while waiting for local node data from clustermesh: %w", ctx.Err())
+			}
+		}
+
 		bootstrapStats.k8sInit.End(true)
 	}
 

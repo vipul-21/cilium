@@ -1241,6 +1241,17 @@ type daemonParams struct {
 	KPRConfig           kpr.KPRConfig
 	KPRInitializer      kprinitializer.KPRInitializer
 	InfraIPAllocator    infraendpoints.InfraIPAllocator
+
+	// NodeWatcherReady is a channel that will be closed when the clustermesh
+	// node watcher is set up and ready to receive node updates from etcd.
+	// This is used when ReadCiliumEndpointSliceFromClusterMesh is enabled.
+	NodeWatcherReady chan struct{} `name:"clustermesh-node-watcher-ready" optional:"true"`
+
+	// LocalNodeReady is a channel that will be closed when the local node
+	// data has been received from the clustermesh etcd. This ensures IPAM
+	// is configured correctly before the agent proceeds with initialization.
+	// This is used when ReadCiliumEndpointSliceFromClusterMesh is enabled.
+	LocalNodeReady chan struct{} `name:"clustermesh-local-node-ready" optional:"true"`
 }
 
 func daemonConfigInitialization(params daemonConfigParams) legacy.DaemonConfigInitialization {

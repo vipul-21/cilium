@@ -166,6 +166,11 @@ func (ini *localNodeSynchronizer) getK8sLocalNode(ctx context.Context) (*slim_co
 // of the call.
 // In the case that the resource event is synced without a ciliumnode upsert event, we return nil.
 func (ini *localNodeSynchronizer) getK8sLocalCiliumNode(ctx context.Context) *v2.CiliumNode {
+	// When reading nodes from clustermesh, K8sCiliumLocalNode is nil
+	if ini.K8sCiliumLocalNode == nil {
+		return nil
+	}
+	
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	select {

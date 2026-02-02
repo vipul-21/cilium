@@ -587,8 +587,8 @@ const (
 	// ClusterMesh API server's etcd cache instead of the Kubernetes watcher.
 	ReadCiliumEndpointFromClusterMeshName = "read-ceps-from-clustermesh"
 
-	// ReadCiliumEndpointSliceFromClusterMeshName toggles consuming CES data from the
-	// ClusterMesh API server's etcd cache instead of the Kubernetes watcher.
+	// ReadCiliumEndpointSliceFromClusterMeshName toggles consuming CES and CiliumNode
+	// data from the ClusterMesh API server's etcd cache instead of the Kubernetes watcher.
 	ReadCiliumEndpointSliceFromClusterMeshName = "read-ces-from-clustermesh"
 
 	// MaxCtrlIntervalName and MaxCtrlIntervalNameEnv allow configuration
@@ -1337,8 +1337,9 @@ type DaemonConfig struct {
 	// Kubernetes.
 	ReadCiliumEndpointFromClusterMesh bool
 
-	// ReadCiliumEndpointSliceFromClusterMesh switches the agent to consume CES data
-	// from the ClusterMesh API server's etcd cache instead of watching the Kubernetes API.
+	// ReadCiliumEndpointSliceFromClusterMesh switches the agent to consume CES and
+	// CiliumNode data from the ClusterMesh API server's etcd cache instead of watching
+	// the Kubernetes API.
 	ReadCiliumEndpointSliceFromClusterMesh bool
 
 	// MaxControllerInterval is the maximum value for a controller's

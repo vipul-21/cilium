@@ -36,6 +36,12 @@ func retrieveNodeInformation(ctx context.Context, log *slog.Logger, localNodeRes
 
 	if option.Config.IPAM == ipamOption.IPAMClusterPool ||
 		option.Config.IPAM == ipamOption.IPAMMultiPool {
+		// When reading from clustermesh, localCiliumNodeResource will be nil
+		// Node information will come from clustermesh etcd via LocalNodeStore
+		if localCiliumNodeResource == nil {
+			log.Info("CiliumNode resource is nil, skipping K8s CiliumNode retrieval (using clustermesh)")
+			return nil
+		}
 		for event := range localCiliumNodeResource.Events(ctx) {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				log.Error("Timeout while waiting for CiliumNode resource: API server connection issue", logfields.NodeName, nodeTypes.GetName())
@@ -91,6 +97,8 @@ func useNodeCIDR(n *nodeTypes.Node) {
 // WaitForNodeInformation retrieves the node information via the CiliumNode or
 // Kubernetes Node resource. This function will block until the information is
 // received.
+// When ReadCiliumEndpointSliceFromClusterMesh is enabled, the node information
+// will be retrieved from clustermesh etcd instead, and this function returns early.
 func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode LocalNodeResource, localCiliumNode LocalCiliumNodeResource) error {
 	// Use of the environment variable overwrites the node-name
 	// automatically derived
@@ -100,6 +108,15 @@ func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode Loc
 			return fmt.Errorf("node name must be specified via environment variable '%s' to retrieve Kubernetes PodCIDR range", k8sConst.EnvNodeNameSpec)
 		}
 		log.Info("K8s node name is empty. BPF NodePort might not be able to auto detect all devices")
+		return nil
+	}
+
+	// When reading from clustermesh, skip K8s node information retrieval.
+	// The local node information will be populated by the clustermesh node watcher
+	// via LocalNodeStore updates in clustermesh_ceps_client.go.
+	if option.Config.ReadCiliumEndpointSliceFromClusterMesh {
+		log.Info("Skipping K8s node information retrieval: reading nodes from clustermesh etcd",
+			logfields.NodeName, nodeName)
 		return nil
 	}
 

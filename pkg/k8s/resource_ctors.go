@@ -156,6 +156,14 @@ func CiliumNodeResource(params CiliumResourceParams, opts ...func(*metav1.ListOp
 	if !params.ClientSet.IsEnabled() {
 		return nil, nil
 	}
+	
+	// When read-ces-from-clustermesh is enabled, skip CiliumNode K8s watcher entirely.
+	// All CiliumNode data (including local node) will come from clustermesh etcd.
+	if option.Config.ReadCiliumEndpointSliceFromClusterMesh {
+		params.Logger.Info("Skipping CiliumNode watcher: reading all nodes from clustermesh etcd")
+		return nil, nil
+	}
+	
 	lw := utils.ListerWatcherWithModifiers(
 		utils.ListerWatcherFromTyped[*cilium_api_v2.CiliumNodeList](params.ClientSet.CiliumV2().CiliumNodes()),
 		opts...,

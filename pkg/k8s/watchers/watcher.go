@@ -276,7 +276,8 @@ func (k *K8sWatcher) enableK8sWatchers(ctx context.Context, resourceNames []stri
 		case resources.K8sAPIGroupPodV1Core:
 			k.k8sPodWatcher.podsInit(ctx)
 		case k8sAPIGroupCiliumNodeV2:
-			if !k.kcfg.IsEnabled() {
+			// Skip CiliumNode watcher if kvstore is enabled OR reading nodes from clustermesh
+			if !k.kcfg.IsEnabled() && !option.Config.ReadCiliumEndpointSliceFromClusterMesh {
 				k.k8sCiliumNodeWatcher.ciliumNodeInit(ctx)
 			}
 		case k8sAPIGroupCiliumEndpointV2:

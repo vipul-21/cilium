@@ -112,7 +112,10 @@ func parseMetrics(reader io.Reader) (promMetricsFamily, error) {
 	return mf, nil
 }
 
-// metricsIncrease verifies for all the metrics that the values increased.
+// metricsIncrease verifies that at least one metric in the family increased.
+// This is necessary because metrics like cilium_forward_count_total have multiple
+// label combinations (EGRESS, INGRESS, SERVICE) and not all may increase for
+// every type of traffic (e.g., SERVICE only increases for service-translated traffic).
 func metricsIncrease(mf1, mf2 *dto.MetricFamily) error {
 	metrics1 := mf1.GetMetric()
 	metrics2 := mf2.GetMetric()
@@ -135,6 +138,8 @@ func metricsIncrease(mf1, mf2 *dto.MetricFamily) error {
 		return fmt.Errorf("metric %s has different length metrics 1: %d and metrics 2: %d", mf1.GetName(), len(metrics1), len(metrics2))
 	}
 
+	// Check if at least one metric increased
+	anyIncreased := false
 	for i := range metrics1 {
 		if metrics1[i].GetCounter() == nil {
 			return fmt.Errorf("metric %s is not a Counter: %v", mf1.GetName(), metrics1[i])
@@ -145,9 +150,13 @@ func metricsIncrease(mf1, mf2 *dto.MetricFamily) error {
 
 		value1 := metrics1[i].GetCounter().GetValue()
 		value2 := metrics2[i].GetCounter().GetValue()
-		if value1 >= value2 {
-			return fmt.Errorf("metric %s did not increase as expected, value 1: %f and value 2: %f", mf1.GetName(), value1, value2)
+		if value2 > value1 {
+			anyIncreased = true
 		}
+	}
+
+	if !anyIncreased {
+		return fmt.Errorf("metric %s did not increase as expected in any label combination", mf1.GetName())
 	}
 
 	return nil
