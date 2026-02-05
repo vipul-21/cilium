@@ -261,10 +261,11 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 		case option.IdentityAllocationModeCRD:
 			m.logger.Debug("Identity allocation backed by CRD")
 			backend, err = identitybackend.NewCRDBackend(m.logger, identitybackend.CRDBackendConfiguration{
-				Store:    nil,
-				StoreSet: &atomic.Bool{},
-				Client:   client,
-				KeyFunc:  (&key.GlobalIdentity{}).PutKeyFromMap,
+				Store:          nil,
+				StoreSet:       &atomic.Bool{},
+				Client:         client,
+				KeyFunc:        (&key.GlobalIdentity{}).PutKeyFromMap,
+				SkipCRDWatcher: option.Config.ReadCiliumEndpointSliceFromClusterMesh,
 			})
 			if err != nil {
 				logging.Fatal(m.logger, "Unable to initialize Kubernetes CRD backend for identity allocation", logfields.Error, err)
@@ -309,6 +310,11 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 			allocOptions = append(allocOptions, allocator.WithOperatorIDManagement())
 		} else {
 			allocOptions = append(allocOptions, allocator.WithMasterKeyProtection())
+		}
+		// When reading from clustermesh, identities are looked up from remote caches
+		// populated by WatchRemoteIdentities.
+		if option.Config.ReadCiliumEndpointSliceFromClusterMesh {
+			allocOptions = append(allocOptions, allocator.WithRemoteCachesForAlloc())
 		}
 		if m.maxAllocAttempts > 0 {
 			allocOptions = append(allocOptions, allocator.WithMaxAllocAttempts(m.maxAllocAttempts))

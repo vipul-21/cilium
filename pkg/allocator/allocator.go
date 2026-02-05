@@ -152,6 +152,11 @@ type Allocator struct {
 	// operatorIDManagement indicates if cilium-operator is managing Cilium Identities.
 	operatorIDManagement bool
 
+	// useRemoteCachesForAlloc indicates that allocation lookups should also check
+	// remote caches. This is used when identities are read from clustermesh etcd
+	// instead of the local CRD store.
+	useRemoteCachesForAlloc bool
+
 	// maxAllocAttempts is the number of attempted allocation requests
 	// performed before failing.
 	maxAllocAttempts int
@@ -409,6 +414,12 @@ func WithMasterKeyProtection() AllocatorOption {
 // Cilium Identities.
 func WithOperatorIDManagement() AllocatorOption {
 	return func(a *Allocator) { a.operatorIDManagement = true }
+}
+
+// WithRemoteCachesForAlloc enables allocation lookups to also check remote caches.
+// This is used when identities are read from clustermesh etcd instead of the local CRD store.
+func WithRemoteCachesForAlloc() AllocatorOption {
+	return func(a *Allocator) { a.useRemoteCachesForAlloc = true }
 }
 
 // WithMaxAllocAttempts sets the maxAllocAttempts. If not set, new Allocator
@@ -760,7 +771,16 @@ func (a *Allocator) Allocate(ctx context.Context, key AllocatorKey) (idpool.ID, 
 
 func (a *Allocator) GetWithRetry(ctx context.Context, key AllocatorKey) (idpool.ID, error) {
 	getID := func() (idpool.ID, error) {
-		id, err := a.Get(ctx, key)
+		var id idpool.ID
+		var err error
+
+		// When useRemoteCachesForAlloc is enabled (e.g., reading identities from
+		// clustermesh etcd), we need to also check remote caches for the identity.
+		if a.useRemoteCachesForAlloc {
+			id, err = a.GetIncludeRemoteCaches(ctx, key)
+		} else {
+			id, err = a.Get(ctx, key)
+		}
 		if err != nil {
 			return idpool.NoID, err
 		}

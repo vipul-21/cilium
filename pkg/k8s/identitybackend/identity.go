@@ -49,6 +49,10 @@ type CRDBackendConfiguration struct {
 	StoreSet *atomic.Bool
 	Client   clientset.Interface
 	KeyFunc  func(map[string]string) allocator.AllocatorKey
+
+	// SkipCRDWatcher when set to true, skips the CiliumIdentity CRD informer.
+	// This is used when reading identities from clustermesh etcd instead of K8s API.
+	SkipCRDWatcher bool
 }
 
 type crdBackend struct {
@@ -105,6 +109,13 @@ func (c *crdBackend) AllocateIDIfLocked(ctx context.Context, id idpool.ID, key a
 
 // AcquireReference acquires a reference to the identity.
 func (c *crdBackend) AcquireReference(ctx context.Context, id idpool.ID, key allocator.AllocatorKey, lock kvstore.KVLocker) error {
+	// When SkipCRDWatcher is true, the local store is not available.
+	// The identity was already created via AllocateID, and the clustermesh-apiserver
+	// will sync it to etcd. Skip the heartbeat annotation check.
+	if c.SkipCRDWatcher {
+		return nil
+	}
+
 	// For CiliumIdentity-based allocation, the reference counting is
 	// handled via CiliumEndpoint. Any CiliumEndpoint referring to a
 	// CiliumIdentity will keep the CiliumIdentity alive. However,
@@ -289,7 +300,9 @@ func (c *crdBackend) GetIfLocked(ctx context.Context, key allocator.AllocatorKey
 // false `exists` if an Identity is not found for the given `id`.
 func (c *crdBackend) getById(ctx context.Context, id idpool.ID) (idty *v2.CiliumIdentity, exists bool, err error) {
 	if !c.StoreSet.Load() {
-		return nil, false, fmt.Errorf("store is not available yet")
+		// Store is not available (e.g., SkipCRDWatcher=true).
+		// Return not found instead of an error.
+		return nil, false, nil
 	}
 
 	identityTemplate := &v2.CiliumIdentity{
@@ -367,6 +380,20 @@ func (c *crdBackend) ListIDs(ctx context.Context) (identityIDs []idpool.ID, err 
 }
 
 func (c *crdBackend) ListAndWatch(ctx context.Context, handler allocator.CacheMutations) {
+	// When SkipCRDWatcher is true, skip the CiliumIdentity CRD informer.
+	// This is used when reading identities from clustermesh etcd instead of K8s API.
+	if c.SkipCRDWatcher {
+		c.logger.Info("Skipping CiliumIdentity CRD watcher, identities will be read from clustermesh etcd")
+		// Note: We intentionally do NOT set c.StoreSet.Store(true) here because
+		// c.Store is not initialized. Methods like get(), getById(), and ListIDs()
+		// check StoreSet before accessing Store, so they will correctly return
+		// "not found" / empty results when identities come from clustermesh etcd.
+		handler.OnListDone()
+		// Block until context is done to keep the watcher "alive"
+		<-ctx.Done()
+		return
+	}
+
 	c.Store = cache.NewIndexer(
 		cache.DeletionHandlingMetaNamespaceKeyFunc,
 		cache.Indexers{byKeyIndex: getIdentitiesByKeyFunc(c.KeyFunc)})

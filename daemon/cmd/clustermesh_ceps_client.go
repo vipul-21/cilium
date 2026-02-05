@@ -14,8 +14,10 @@ import (
 
 	"github.com/cilium/hive/cell"
 
+	"github.com/cilium/cilium/pkg/clustermesh"
 	cmcommon "github.com/cilium/cilium/pkg/clustermesh/common"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
+	identityCache "github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -44,8 +46,9 @@ type cepKVStoreClientParams struct {
 	ClusterMeshConfig   cmcommon.Config
 	RemoteClientFactory cmcommon.RemoteClientFactoryFn
 
-	NodeManager    nodemanager.NodeManager
-	LocalNodeStore *node.LocalNodeStore
+	NodeManager            nodemanager.NodeManager
+	LocalNodeStore         *node.LocalNodeStore
+	RemoteIdentityWatcher  clustermesh.RemoteIdentityWatcher
 }
 
 type cepKVStoreClientOut struct {
@@ -132,6 +135,8 @@ func newClusterMeshCEPClient(params cepKVStoreClientParams) (cepKVStoreClientOut
 	// If reading CES mode (which also includes CiliumNode), set up the node watcher
 	if params.Config.ReadCiliumEndpointSliceFromClusterMesh {
 		setupNodeWatcher(ctx, params, client, clusterName, logger, watcherReady, localNodeReady)
+		// Also set up identity watcher from clustermesh etcd instead of CRD
+		setupIdentityWatcher(ctx, params, client, clusterName, logger)
 	} else {
 		// If not using CES mode, close the channels immediately as we don't need to wait
 		close(watcherReady)
@@ -269,5 +274,56 @@ func setupNodeWatcher(ctx context.Context, params cepKVStoreClientParams, client
 		// Log if it exits unexpectedly
 		nodeWatcher.Watch(ctx, client, nodePath)
 		logger.Warn("Node watcher exited", logfields.Path, nodePath)
+	}()
+}
+
+// setupIdentityWatcher configures watching of CiliumIdentity data from clustermesh etcd.
+// This replaces the CiliumIdentity CRD watcher when ReadCiliumEndpointSliceFromClusterMesh is enabled.
+// The identity allocator's CRD backend will skip its watcher, and this function sets up
+// a kvstore-based watcher instead.
+func setupIdentityWatcher(ctx context.Context, params cepKVStoreClientParams, client kvstore.Client, clusterName string, logger *slog.Logger) {
+	// The identities path in clustermesh etcd is: cilium/state/identities/v1/id/<identity-id>
+	// This is the same path used by the kvstore backend in identityAllocationMode=kvstore
+	// and is the path clustermesh-apiserver syncs CiliumIdentity CRDs to.
+
+	go func() {
+		logger.Info("Setting up identity watcher from clustermesh etcd",
+			logfields.Path, identityCache.IdentitiesPath,
+			logfields.ClusterName, clusterName,
+		)
+
+		// WatchRemoteIdentities will wait for globalIdentityAllocatorInitialized,
+		// so this is safe to call even if the allocator isn't ready yet.
+		// We use the configured ClusterID since identities are allocated within the cluster's range.
+		// Setting cachedPrefix=false means we watch from cilium/state/identities/v1/id/
+		// (the raw path, not the cached path).
+		remoteCache, err := params.RemoteIdentityWatcher.WatchRemoteIdentities(
+			clusterName,
+			uint32(option.Config.ClusterID), // Use the configured cluster ID for identity validation
+			client,
+			false, // cachedPrefix - false means use raw path, not cached
+		)
+		if err != nil {
+			logger.Error("Failed to set up identity watcher from clustermesh etcd",
+				logfields.Error, err,
+				logfields.ClusterName, clusterName,
+			)
+			return
+		}
+
+		logger.Info("Identity watcher from clustermesh etcd is starting",
+			logfields.Path, identityCache.IdentitiesPath,
+			logfields.ClusterName, clusterName,
+		)
+
+		// Start watching - this will block until context is done
+		remoteCache.Watch(ctx, func(ctx context.Context) {
+			logger.Info("Initial identity sync from clustermesh etcd completed")
+		})
+
+		logger.Warn("Identity watcher from clustermesh etcd exited",
+			logfields.Path, identityCache.IdentitiesPath,
+			logfields.ClusterName, clusterName,
+		)
 	}()
 }
