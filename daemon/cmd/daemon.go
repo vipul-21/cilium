@@ -278,16 +278,16 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 	// the watcher uses a separate kvstore client (ipcache-clustermesh-ceps)
 	// to read from the clustermesh etcd. Both CEP and CES modes use the same
 	// client since they read from the same etcd path (cilium/state/ip/v1/default/<IP>).
-	if params.IPIdentityWatcher.IsEnabled() || params.DaemonConfig.ReadCiliumEndpointFromClusterMesh || params.DaemonConfig.ReadCiliumEndpointSliceFromClusterMesh {
-		go func() {
-			params.Logger.Info("Starting IP identity watcher",
-				"kvstoreEnabled", params.IPIdentityWatcher.IsEnabled(),
-				"readCEPsFromClustermesh", params.DaemonConfig.ReadCiliumEndpointFromClusterMesh,
-				"readCESFromClustermesh", params.DaemonConfig.ReadCiliumEndpointSliceFromClusterMesh,
-			)
-			params.IPIdentityWatcher.Watch(ctx)
-		}()
-	}
+	// if params.IPIdentityWatcher.IsEnabled() || params.DaemonConfig.ReadCiliumEndpointFromClusterMesh || params.DaemonConfig.ReadCiliumEndpointSliceFromClusterMesh {
+	// 	go func() {
+	// 		params.Logger.Info("Starting IP identity watcher",
+	// 			"kvstoreEnabled", params.IPIdentityWatcher.IsEnabled(),
+	// 			"readCEPsFromClustermesh", params.DaemonConfig.ReadCiliumEndpointFromClusterMesh,
+	// 			"readCESFromClustermesh", params.DaemonConfig.ReadCiliumEndpointSliceFromClusterMesh,
+	// 		)
+	// 		params.IPIdentityWatcher.Watch(ctx)
+	// 	}()
+	// }
 
 	if err := params.IPsecAgent.StartBackgroundJobs(params.NodeHandler); err != nil {
 		params.Logger.Error("Unable to start IPsec key watcher", logfields.Error, err)

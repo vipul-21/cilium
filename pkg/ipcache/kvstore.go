@@ -22,6 +22,7 @@ import (
 	storepkg "github.com/cilium/cilium/pkg/kvstore/store"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/types"
 	"github.com/cilium/cilium/pkg/u8proto"
@@ -182,7 +183,8 @@ func NewLocalIPIdentityWatcher(in struct {
 	if in.Config.DisableSelfDeletionProtection && in.CEPClient != nil {
 		client = in.CEPClient
 	}
-	return &LocalIPIdentityWatcher{
+	watcher := &LocalIPIdentityWatcher{
+		logger:  in.Logger,
 		watcher: NewIPIdentityWatcher(
 			in.Logger, in.ClusterInfo.Name, in.IPCache,
 			in.Factory, source.KVStore,
@@ -193,11 +195,16 @@ func NewLocalIPIdentityWatcher(in struct {
 		config:                 in.Config,
 		policyUpdater:          in.PolicyUpdater,
 	}
-
-	if watcher.IsEnabled() {
+	if watcher.IsEnabled()  || option.Config.ReadCiliumEndpointFromClusterMesh || option.Config.ReadCiliumEndpointSliceFromClusterMesh {
 		// Start watcher for endpoint IP --> identity mappings in key-value store.
 		// this needs to be done *after* that the ipcache map has been recreated
 		// by the IPCache lifecycle hook.
+					in.Logger.Info("Starting IP identity watcher",
+			"kvstoreEnabled", watcher.IsEnabled(),
+			"readCEPsFromClustermesh", option.Config.ReadCiliumEndpointFromClusterMesh,
+			"readCESFromClustermesh", option.Config.ReadCiliumEndpointSliceFromClusterMesh,
+		)
+
 		in.JobGroup.Add(job.OneShot("watch", watcher.Watch))
 	}
 
@@ -205,7 +212,7 @@ func NewLocalIPIdentityWatcher(in struct {
 }
 
 // Watch starts the watcher and blocks waiting for events, until the context is closed.
-func (liw *LocalIPIdentityWatcher) Watch(ctx context.Context) {
+func (liw *LocalIPIdentityWatcher) Watch(ctx context.Context, _ cell.Health) error {
 	var opts []IWOpt
 	if liw.selfDeletionProtection {
 		opts = append(opts, WithSelfDeletionProtection(liw.syncer))
@@ -217,6 +224,7 @@ func (liw *LocalIPIdentityWatcher) Watch(ctx context.Context) {
 		opts = append(opts, WithPolicyUpdater(liw.policyUpdater))
 	}
 	liw.watcher.Watch(ctx, liw.client, opts...)
+	return nil
 }
 
 // WaitForSync blocks until either the initial list of entries had been retrieved

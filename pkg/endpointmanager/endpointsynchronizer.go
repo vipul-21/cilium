@@ -160,7 +160,11 @@ func (epSync *EndpointSynchronizer) RunK8sCiliumEndpointSync(e *endpoint.Endpoin
 					// for the changes to propagate to the local store.
 					// This prevents false positives where we think the CEP was deleted
 					// externally when it's just not yet in the informer cache.
-					if localCEP != nil && time.Since(lastSuccessfulOp) >= informerSyncGracePeriod {
+					//
+					// Skip this check when reading from clustermesh etcd, as the local
+					// informer stores are not populated in that mode.
+					if localCEP != nil && time.Since(lastSuccessfulOp) >= informerSyncGracePeriod &&
+						!option.Config.ReadCiliumEndpointSliceFromClusterMesh {
 						cepExists := false
 
 						// Check if CiliumEndpointSlice is enabled

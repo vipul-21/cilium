@@ -555,6 +555,23 @@ func (a *Allocator) lockedAllocate(ctx context.Context, key AllocatorKey) (idpoo
 		return 0, false, false, err
 	}
 
+	// When useRemoteCachesForAlloc is enabled (e.g., reading identities from
+	// clustermesh etcd), we need to also check remote caches for the identity
+	// before attempting to allocate a new one. This prevents duplicate identities
+	// from being allocated when the same labels already have an identity in the
+	// remote cache (synced from clustermesh etcd).
+	if value == 0 && a.useRemoteCachesForAlloc {
+		a.remoteCachesMutex.RLock()
+		for _, rc := range a.remoteCaches {
+			if id := rc.cache.get(key.GetKey()); id != idpool.NoID {
+				value = id
+				a.logger.Debug("Found identity in remote cache, reusing", logfields.Key, key, logfields.ID, value)
+				break
+			}
+		}
+		a.remoteCachesMutex.RUnlock()
+	}
+
 	kvstore.Trace(a.logger, "kvstore state is: ", fieldID, value)
 
 	a.slaveKeysMutex.Lock()
