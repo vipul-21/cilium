@@ -105,6 +105,8 @@ const (
 	PropertySkipMasqueradeV4 = "property-skip-masquerade-v4"
 	// PropertySkipMasqueradeV6 will mark the endpoint to skip IPv6 masquerade.
 	PropertySkipMasqueradeV6 = "property-skip-masquerade-v6"
+	// PropertyMeshed marks the endpoint as enrolled in ztunnel mesh.
+	PropertyMeshed = "property-meshed"
 )
 
 var (
@@ -585,6 +587,10 @@ func (e *Endpoint) SkipMasqueradeV4() bool {
 
 func (e *Endpoint) SkipMasqueradeV6() bool {
 	return e.isProperty(PropertySkipMasqueradeV6)
+}
+
+func (e *Endpoint) IsMeshed() bool {
+	return e.isProperty(PropertyMeshed)
 }
 
 // SetIsHost is a convenient method to create host endpoints for testing.

@@ -276,7 +276,7 @@ func (ipc *IPCache) getEndpointFlagsRLocked(ip string) uint8 {
 func (ipc *IPCache) Upsert(ip string, hostIP net.IP, hostKey uint8, k8sMeta *K8sMetadata, newIdentity Identity) (namedPortsChanged bool, err error) {
 	ipc.mutex.Lock()
 	defer ipc.mutex.Unlock()
-	return ipc.upsertLocked(ip, hostIP, hostKey, k8sMeta, newIdentity, 0 /* endpointFlags unused in legacy */, false /* !force */, true /* fromLegacyAPI */)
+	return ipc.upsertLocked(ip, hostIP, hostKey, k8sMeta, newIdentity, 0 /* endpointFlags preserved via fromLegacyAPI */, false /* !force */, true /* fromLegacyAPI */)
 }
 
 // upsertLocked adds / updates the provided IP and identity into the IPCache,
@@ -333,6 +333,20 @@ func (ipc *IPCache) upsertLocked(
 	oldEndpointFlags := ipc.getEndpointFlagsRLocked(ip)
 	oldK8sMeta := ipc.ipToK8sMetadata[ip]
 	metaEqual := oldK8sMeta.Equal(k8sMeta)
+
+	// Legacy API callers don't manage endpoint flags; preserve any
+	// flags already set by the metadata API (e.g. meshed flag).
+	// Check both the bare IP key and the CIDR-format key, since the
+	// metadata API stores flags under the CIDR key (e.g. "10.0.0.1/32")
+	// while the legacy API uses the bare IP key (e.g. "10.0.0.1").
+	if fromLegacyAPI && endpointFlags == 0 {
+		endpointFlags = oldEndpointFlags
+		if endpointFlags == 0 {
+			if addrCluster, err := cmtypes.ParseAddrCluster(ip); err == nil {
+				endpointFlags = ipc.getEndpointFlagsRLocked(addrCluster.AsPrefixCluster().String())
+			}
+		}
+	}
 
 	cachedIdentity, found := ipc.ipToIdentityCache[ip]
 	if found {
@@ -396,11 +410,29 @@ func (ipc *IPCache) upsertLocked(
 	// don't notify the listeners.
 	if cidrCluster, err = cmtypes.ParsePrefixCluster(ip); err == nil {
 		if cidrCluster.IsSingleIP() {
-			if _, endpointIPFound := ipc.ipToIdentityCache[cidrCluster.AddrCluster().String()]; endpointIPFound {
+			epIPStr := cidrCluster.AddrCluster().String()
+			if _, endpointIPFound := ipc.ipToIdentityCache[epIPStr]; endpointIPFound {
 				scopedLog.Debug("Ignoring CIDR to identity mapping as it is shadowed by an endpoint IP")
 				// Skip calling back the listeners, since the endpoint IP has
 				// precedence over the new CIDR.
 				newIdentity.shadowed = true
+
+				// Propagate endpoint flags from the metadata API (CIDR key)
+				// to the shadowing endpoint IP entry, so flags set via
+				// UpsertMetadata (e.g. meshed) are reflected in the BPF map.
+				if endpointFlags != 0 {
+					oldEPFlags := ipc.getEndpointFlagsRLocked(epIPStr)
+					if oldEPFlags != endpointFlags {
+						ipc.ipToEndpointFlags[epIPStr] = endpointFlags
+						if epIdentity, ok := ipc.ipToIdentityCache[epIPStr]; ok && !epIdentity.shadowed {
+							epHostIP, epHostKey := ipc.getHostIPCacheRLocked(epIPStr)
+							epMeta := ipc.ipToK8sMetadata[epIPStr]
+							for _, listener := range ipc.listeners {
+								listener.OnIPIdentityCacheChange(Upsert, cidrCluster, epHostIP, epHostIP, nil, epIdentity, epHostKey, &epMeta, endpointFlags)
+							}
+						}
+					}
+				}
 			}
 		}
 	} else if addrCluster, err := cmtypes.ParseAddrCluster(ip); err == nil { // Endpoint IP or Endpoint IP with ClusterID

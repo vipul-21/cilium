@@ -7,15 +7,19 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sync/atomic"
 
 	"github.com/cilium/hive/cell"
+	"github.com/cilium/statedb"
 
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	ipsec "github.com/cilium/cilium/pkg/datapath/linux/ipsec/types"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	hubblemetrics "github.com/cilium/cilium/pkg/hubble/metrics"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
+	ipcacheTypes "github.com/cilium/cilium/pkg/ipcache/types"
 	cilium_api_v2a1 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	k8sSynced "github.com/cilium/cilium/pkg/k8s/synced"
@@ -29,6 +33,7 @@ import (
 	ciliumTypes "github.com/cilium/cilium/pkg/types"
 	"github.com/cilium/cilium/pkg/u8proto"
 	wgTypes "github.com/cilium/cilium/pkg/wireguard/types"
+	"github.com/cilium/cilium/pkg/ztunnel/table"
 )
 
 type k8sCiliumEndpointsWatcherParams struct {
@@ -47,21 +52,26 @@ type k8sCiliumEndpointsWatcherParams struct {
 	WgConfig        wgTypes.Config
 	IPSecConfig     ipsec.Config
 	LocalNodeStore  *node.LocalNodeStore
+
+	DB                     *statedb.DB
+	EnrolledNamespaceTable statedb.Table[*table.EnrolledNamespace] `optional:"true"`
 }
 
 func newK8sCiliumEndpointsWatcher(params k8sCiliumEndpointsWatcherParams) *K8sCiliumEndpointsWatcher {
 	return &K8sCiliumEndpointsWatcher{
-		logger:              params.Logger,
-		k8sResourceSynced:   params.K8sResourceSynced,
-		k8sAPIGroups:        params.K8sAPIGroups,
-		ciliumEndpointSlice: params.CiliumEndpointSlice,
-		ciliumSlimEndpoint:  params.CiliumSlimEndpoint,
-		endpointManager:     params.EndpointManager,
-		policyManager:       params.PolicyUpdater,
-		ipcache:             params.IPCache,
-		wgConfig:            params.WgConfig,
-		ipsecConfig:         params.IPSecConfig,
-		localNodeStore:      params.LocalNodeStore,
+		logger:                 params.Logger,
+		k8sResourceSynced:      params.K8sResourceSynced,
+		k8sAPIGroups:           params.K8sAPIGroups,
+		ciliumEndpointSlice:    params.CiliumEndpointSlice,
+		ciliumSlimEndpoint:     params.CiliumSlimEndpoint,
+		endpointManager:        params.EndpointManager,
+		policyManager:          params.PolicyUpdater,
+		ipcache:                params.IPCache,
+		wgConfig:               params.WgConfig,
+		ipsecConfig:            params.IPSecConfig,
+		localNodeStore:         params.LocalNodeStore,
+		db:                     params.DB,
+		enrolledNamespaceTable: params.EnrolledNamespaceTable,
 	}
 }
 
@@ -85,6 +95,9 @@ type K8sCiliumEndpointsWatcher struct {
 
 	ciliumSlimEndpoint  resource.Resource[*types.CiliumEndpoint]
 	ciliumEndpointSlice resource.Resource[*cilium_api_v2a1.CiliumEndpointSlice]
+
+	db                     *statedb.DB
+	enrolledNamespaceTable statedb.Table[*table.EnrolledNamespace]
 }
 
 // initCiliumEndpointOrSlices initializes the ciliumEndpoints or ciliumEndpointSlice
@@ -253,6 +266,11 @@ func (k *K8sCiliumEndpointsWatcher) endpointUpdated(oldEndpoint, endpoint *types
 			}
 		}
 	}
+
+	// If the endpoint's namespace is enrolled in ztunnel mesh,
+	// set the meshed flag in ipcache so BPF on this node knows
+	// to use HBONE for traffic to/from this endpoint.
+	k.setMeshedMetadataIfEnrolled(endpoint)
 }
 
 func (k *K8sCiliumEndpointsWatcher) endpointDeleted(endpoint *types.CiliumEndpoint) {
@@ -278,4 +296,44 @@ func (k *K8sCiliumEndpointsWatcher) endpointDeleted(endpoint *types.CiliumEndpoi
 		}
 	}
 	hubblemetrics.ProcessCiliumEndpointDeletion(endpoint)
+}
+
+const meshedResourceID ipcacheTypes.ResourceID = "ztunnel-mesh"
+
+// setMeshedMetadataIfEnrolled checks if the endpoint's namespace is enrolled
+// in the ztunnel mesh and, if so, sets the meshed flag in ipcache for each
+// of its IPs. This allows BPF on every node to know which remote endpoints
+// are meshed, without requiring CRD schema changes.
+// Removal of the meshed flag (on namespace disenrollment) is handled by the
+// reconciler's Delete() path, so this function only upserts.
+func (k *K8sCiliumEndpointsWatcher) setMeshedMetadataIfEnrolled(endpoint *types.CiliumEndpoint) {
+	if k.enrolledNamespaceTable == nil || k.db == nil {
+		return
+	}
+	if endpoint.Networking == nil {
+		return
+	}
+
+	txn := k.db.ReadTxn()
+	_, _, found := k.enrolledNamespaceTable.Get(txn, table.EnrolledNamespacesNameIndex.Query(endpoint.Namespace))
+	if !found {
+		return
+	}
+
+	var flags ipcacheTypes.EndpointFlags
+	flags.SetMeshed(true)
+
+	for _, pair := range endpoint.Networking.Addressing {
+		for _, ipStr := range []string{pair.IPV4, pair.IPV6} {
+			if ipStr == "" {
+				continue
+			}
+			ip, err := netip.ParseAddr(ipStr)
+			if err != nil {
+				continue
+			}
+			prefix := cmtypes.NewLocalPrefixCluster(netip.PrefixFrom(ip, ip.BitLen()))
+			k.ipcache.UpsertMetadata(prefix, source.CustomResource, meshedResourceID, flags)
+		}
+	}
 }

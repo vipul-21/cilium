@@ -33,6 +33,7 @@
 #include "lib/dbg.h"
 #include "lib/l3.h"
 #include "lib/local_delivery.h"
+#include "lib/mesh.h"
 #include "lib/lxc.h"
 #include "lib/lrp.h"
 #include "lib/identity.h"
@@ -2358,24 +2359,55 @@ int tail_ipv4_policy(struct __ctx_buff *ctx)
 		break;
 	case CTX_ACT_OK:
 #if !defined(ENABLE_ROUTING) && !defined(ENABLE_NODEPORT)
-		/* In tunneling mode, we execute this code to send the packet from
-		 * cilium_vxlan to lxc*. If we're using kube-proxy, we don't want to use
-		 * redirect() because that would bypass conntrack and the reverse DNAT.
-		 * Thus, we send packets to the stack, but since they have the wrong
-		 * Ethernet addresses, we need to mark them as PACKET_HOST or the kernel
-		 * will drop them.
-		 * See #14646 for details.
-		 */
 		if (from_tunnel) {
 			ctx_change_type(ctx, PACKET_HOST);
 			break;
 		}
 #endif /* !ENABLE_ROUTING && !ENABLE_NODEPORT */
 
-		if (do_redirect)
+		if (do_redirect) {
+			bool use_peer = should_redirect_peer(from_host);
+
+			/* Meshed pods rely on iptables PREROUTING to
+			 * redirect inbound traffic to ztunnel. Disable
+			 * bpf_redirect_peer which bypasses netfilter.
+			 * For tunnel traffic, set PACKET_HOST so the
+			 * kernel IP layer accepts the packet.
+			 */
+			if (!revalidate_data(ctx, &data, &data_end, &ip4)) {
+				ret = DROP_INVALID;
+				goto drop_err;
+			}
+			if (is_ip4_meshed(ip4->daddr)) {
+				use_peer = false;
+				if (from_tunnel)
+					ctx_change_type(ctx, PACKET_HOST);
+				/* If both source and destination are
+				 * meshed, this is mTLS mesh traffic
+				 * (HBONE). Stamp DSCP so iptables in
+				 * the pod netns redirects to ztunnel's
+				 * HBONE inbound port (15008).
+				 * Non-meshed sources skip the mark and
+				 * reach ztunnel's plaintext port (15006).
+				 */
+				if (is_ip4_meshed(ip4->saddr)) {
+					if (!revalidate_data(ctx, &data,
+							     &data_end,
+							     &ip4)) {
+						ret = DROP_INVALID;
+						goto drop_err;
+					}
+					if (ipv4_set_dscp_meshed(ctx,
+								 ETH_HLEN,
+								 ip4) < 0) {
+						ret = DROP_WRITE_ERROR;
+						goto drop_err;
+					}
+				}
+			}
 			ret = redirect_ep(ctx, CONFIG(interface_ifindex),
-					  should_redirect_peer(from_host),
-					  from_tunnel);
+					  use_peer, from_tunnel);
+		}
 		break;
 	default:
 		break;

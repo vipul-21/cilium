@@ -28,6 +28,7 @@ struct endpoint_key {
 #define ENDPOINT_F_ATHOSTNS		2 /* Endpoint located at the host networking namespace */
 #define ENDPOINT_F_NO_SNAT_V4	4 /* Endpoint should not be masqueraded for IPv4 */
 #define ENDPOINT_F_NO_SNAT_V6	8 /* Endpoint should not be masqueraded for IPv6 */
+#define ENDPOINT_F_MESHED		16 /* Endpoint is enrolled in ztunnel mesh */
 #define ENDPOINT_MASK_HOST_DELIVERY	(ENDPOINT_F_HOST | ENDPOINT_F_ATHOSTNS)
 #define ENDPOINT_MASK_SKIP_MASQ_V4 (ENDPOINT_F_HOST | ENDPOINT_F_NO_SNAT_V4)
 #define ENDPOINT_MASK_SKIP_MASQ_V6 (ENDPOINT_F_HOST | ENDPOINT_F_NO_SNAT_V6)
@@ -100,7 +101,8 @@ struct remote_endpoint_info {
 			flag_has_tunnel_ep:1,
 			flag_ipv6_tunnel_ep:1,
 			flag_remote_cluster:1,
-			pad2:4;
+			flag_meshed:1,
+			pad2:3;
 };
 
 struct ipcache_key {

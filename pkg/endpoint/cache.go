@@ -209,6 +209,10 @@ func (ep *epInfoCache) SkipMasqueradeV6() bool {
 	return ep.isProperty(PropertySkipMasqueradeV6)
 }
 
+func (ep *epInfoCache) IsMeshed() bool {
+	return ep.isProperty(PropertyMeshed)
+}
+
 // isProperty checks if the value of the properties map is set, it's a boolean
 // and its value is 'true'.
 func (ep *epInfoCache) isProperty(propertyKey string) bool {

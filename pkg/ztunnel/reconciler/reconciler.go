@@ -8,10 +8,14 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"net/netip"
 
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
+	"github.com/cilium/cilium/pkg/ipcache"
+	ipcacheTypes "github.com/cilium/cilium/pkg/ipcache/types"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2alpha1"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -19,6 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
+	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/ztunnel/config"
 	"github.com/cilium/cilium/pkg/ztunnel/table"
 	"github.com/cilium/cilium/pkg/ztunnel/xds"
@@ -43,6 +48,7 @@ type params struct {
 	EndpointEventChannel        chan *xds.EndpointEvent
 	CiliumEndpointResource      resource.Resource[*types.CiliumEndpoint]
 	CiliumEndpointSliceResource resource.Resource[*v2alpha1.CiliumEndpointSlice]
+	IPCache                     *ipcache.IPCache
 }
 
 type EnrollmentReconciler struct {
@@ -55,6 +61,7 @@ type EnrollmentReconciler struct {
 	endpointEventCh             chan *xds.EndpointEvent
 	ciliumEndpointResource      resource.Resource[*types.CiliumEndpoint]
 	ciliumEndpointSliceResource resource.Resource[*v2alpha1.CiliumEndpointSlice]
+	ipcache                     *ipcache.IPCache
 }
 
 func NewEnrollmentReconciler(cfg params) reconciler.Operations[*table.EnrolledNamespace] {
@@ -72,6 +79,7 @@ func NewEnrollmentReconciler(cfg params) reconciler.Operations[*table.EnrolledNa
 		endpointEventCh:             cfg.EndpointEventChannel,
 		ciliumEndpointResource:      cfg.CiliumEndpointResource,
 		ciliumEndpointSliceResource: cfg.CiliumEndpointSliceResource,
+		ipcache:                     cfg.IPCache,
 	}
 	cfg.Lifecycle.Append(ops)
 	return ops
@@ -147,7 +155,13 @@ func (ops *EnrollmentReconciler) Update(ctx context.Context, txn statedb.ReadTxn
 			)
 			return err
 		}
+		ops.setMeshedMetadata(ep, true)
 	}
+	// Set meshed ipcache metadata for all IPs in this namespace
+	// (both local and remote endpoints) so every node's BPF map
+	// knows these endpoints are meshed.
+	ops.setMeshedMetadataForNamespace(ctx, ns.Name, true)
+
 	ops.logger.Info("Enrolled all endpoints in namespace", logfields.K8sNamespace, ns.Name)
 	return nil
 }
@@ -167,7 +181,11 @@ func (ops *EnrollmentReconciler) Delete(ctx context.Context, txn statedb.ReadTxn
 			)
 			return err
 		}
+		ops.setMeshedMetadata(ep, false)
 	}
+
+	// Clear meshed ipcache metadata for all IPs in this namespace.
+	ops.setMeshedMetadataForNamespace(ctx, ns.Name, false)
 
 	if err := ops.emitEndpointEvents(ctx, ns.Name, xds.REMOVED); err != nil {
 		return err
@@ -185,6 +203,101 @@ func (ops *EnrollmentReconciler) Prune(ctx context.Context, txn statedb.ReadTxn,
 }
 
 var _ reconciler.Operations[*table.EnrolledNamespace] = &EnrollmentReconciler{}
+
+const meshedResourceID ipcacheTypes.ResourceID = "ztunnel-mesh"
+
+// setMeshedMetadata updates the ipcache and endpoint property to reflect
+// the meshed enrollment state for a local endpoint.
+func (ops *EnrollmentReconciler) setMeshedMetadata(ep *endpoint.Endpoint, meshed bool) {
+	ep.SetPropertyValue(endpoint.PropertyMeshed, meshed)
+	ops.setMeshedMetadataForIP(ep.IPv4Address(), meshed)
+}
+
+// setMeshedMetadataForIP updates the ipcache meshed flag for a single IP.
+// This works for both local and remote pod IPs.
+func (ops *EnrollmentReconciler) setMeshedMetadataForIP(ip netip.Addr, meshed bool) {
+	if !ip.IsValid() {
+		return
+	}
+	prefix := cmtypes.NewLocalPrefixCluster(netip.PrefixFrom(ip, ip.BitLen()))
+	flags := ipcacheTypes.EndpointFlags{}
+	flags.SetMeshed(meshed)
+	if meshed {
+		ops.ipcache.UpsertMetadata(prefix, source.CustomResource, meshedResourceID, flags)
+	} else {
+		ops.ipcache.RemoveMetadata(prefix, meshedResourceID, flags)
+	}
+}
+
+// setMeshedMetadataForNamespace sets the meshed ipcache flag for all
+// endpoint IPs in the given namespace by iterating the CES/CEP store.
+// This covers both local and remote endpoints.
+func (ops *EnrollmentReconciler) setMeshedMetadataForNamespace(ctx context.Context, namespace string, meshed bool) {
+	if option.Config.EnableCiliumEndpointSlice {
+		cesStore, err := ops.ciliumEndpointSliceResource.Store(ctx)
+		if err != nil {
+			ops.logger.Error("Failed to get CES store for meshed metadata",
+				logfields.Error, err)
+			return
+		}
+		slices, err := cesStore.ByIndex(k8s.NamespaceIndex, namespace)
+		if err != nil {
+			ops.logger.Error("Failed to get CES by namespace for meshed metadata",
+				logfields.Error, err)
+			return
+		}
+		for _, ces := range slices {
+			for _, coreCep := range ces.Endpoints {
+				if coreCep.Networking == nil {
+					continue
+				}
+				for _, pair := range coreCep.Networking.Addressing {
+					if pair.IPV4 != "" {
+						if ip, err := netip.ParseAddr(pair.IPV4); err == nil {
+							ops.setMeshedMetadataForIP(ip, meshed)
+						}
+					}
+					if pair.IPV6 != "" {
+						if ip, err := netip.ParseAddr(pair.IPV6); err == nil {
+							ops.setMeshedMetadataForIP(ip, meshed)
+						}
+					}
+				}
+			}
+		}
+		return
+	}
+
+	cepStore, err := ops.ciliumEndpointResource.Store(ctx)
+	if err != nil {
+		ops.logger.Error("Failed to get CEP store for meshed metadata",
+			logfields.Error, err)
+		return
+	}
+	ceps, err := cepStore.ByIndex(k8s.NamespaceIndex, namespace)
+	if err != nil {
+		ops.logger.Error("Failed to get CEPs by namespace for meshed metadata",
+			logfields.Error, err)
+		return
+	}
+	for _, cep := range ceps {
+		if cep.Networking == nil {
+			continue
+		}
+		for _, pair := range cep.Networking.Addressing {
+			if pair.IPV4 != "" {
+				if ip, err := netip.ParseAddr(pair.IPV4); err == nil {
+					ops.setMeshedMetadataForIP(ip, meshed)
+				}
+			}
+			if pair.IPV6 != "" {
+				if ip, err := netip.ParseAddr(pair.IPV6); err == nil {
+					ops.setMeshedMetadataForIP(ip, meshed)
+				}
+			}
+		}
+	}
+}
 
 // isZtunnelPod returns true if the endpoint is a ztunnel pod.
 // This checks for the "app=ztunnel-cilium" label that is set on ztunnel pods.
@@ -272,7 +385,9 @@ func (ops *EnrollmentReconciler) EndpointCreated(ep *endpoint.Endpoint) {
 			logfields.Pod, ep.K8sPodName,
 			logfields.Error, err,
 		)
+		return
 	}
+	ops.setMeshedMetadata(ep, true)
 }
 
 func (ops *EnrollmentReconciler) EndpointDeleted(ep *endpoint.Endpoint, _ endpoint.DeleteConfig) {
@@ -298,7 +413,9 @@ func (ops *EnrollmentReconciler) EndpointDeleted(ep *endpoint.Endpoint, _ endpoi
 			logfields.Pod, ep.K8sPodName,
 			logfields.Error, err,
 		)
+		return
 	}
+	ops.setMeshedMetadata(ep, false)
 }
 
 func (ops *EnrollmentReconciler) EndpointRestored(ep *endpoint.Endpoint) {}

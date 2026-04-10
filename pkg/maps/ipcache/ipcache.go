@@ -126,6 +126,9 @@ func (f RemoteEndpointInfoFlags) String() string {
 	if f&FlagRemoteCluster != 0 {
 		flags += "remotecluster,"
 	}
+	if f&FlagMeshed != 0 {
+		flags += "meshed,"
+	}
 
 	if flags == "" {
 		return "<none>"
@@ -147,6 +150,8 @@ const (
 	// FlagRemoteCluster is set when the node is in a remote cluster.
 	// It's always unset when clustermesh is disabled or for pods.
 	FlagRemoteCluster
+	// FlagMeshed is set when the endpoint is enrolled in ztunnel mesh.
+	FlagMeshed
 )
 
 // RemoteEndpointInfo implements the bpf.MapValue interface. It contains the

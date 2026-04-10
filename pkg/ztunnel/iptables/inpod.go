@@ -38,6 +38,11 @@ const (
 	ZtunnelOutboundPort         = 15001
 	ZtunnelInboundPlaintextPort = 15006
 
+	// DSCPMeshedMark is the DSCP value set by Cilium BPF when both source and
+	// destination are meshed (mTLS/HBONE traffic). Matched by iptables to
+	// redirect to ZtunnelInboundPort (15008).
+	DSCPMeshedMark = 0x17
+
 	VersionSpecificPlaceholder = "<VERSION_SPECIFIC>"
 )
 
@@ -304,6 +309,17 @@ func addInPodRules(logger *slog.Logger, ipv4Enabled, ipv6Enabled bool) error {
 		"--mark", inpodMark,
 		"-j", "CONNMARK",
 		"--set-xmark", inpodTproxyMark)
+
+	// If the packet has the DSCP meshed mark (set by Cilium BPF when both
+	// source and destination are meshed), redirect to ztunnel's HBONE inbound
+	// port for TLS+H2 termination.
+	// -A CILIUM_PREROUTING -p tcp -m dscp --dscp 0x17 -j REDIRECT --to-ports 15008
+	rm.add("nat", InpodPreroutingChain,
+		"-p", "tcp",
+		"-m", "dscp", "--dscp", fmt.Sprintf("%#x", DSCPMeshedMark),
+		"-j", "REDIRECT",
+		"--to-ports", fmt.Sprint(ZtunnelInboundPort),
+	)
 
 	// Anything that is not bound for localhost and does not have the mark, REDIRECT to ztunnel inbound plaintext port <INPLAINPORT>
 	// Skip 15008, which will go direct without redirect needed.

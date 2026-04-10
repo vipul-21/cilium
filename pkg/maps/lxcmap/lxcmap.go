@@ -109,6 +109,9 @@ const (
 
 	// EndpointFlagSkipMasqueradeV6 indicates that this endpoint should skip IPv6 masquerade for remote traffic
 	EndpointFlagSkipMasqueradeV6 = 8
+
+	// EndpointFlagMeshed indicates that this endpoint is enrolled in ztunnel mesh
+	EndpointFlagMeshed = 16
 )
 
 // EndpointFrontend is the interface to implement for an object to synchronize
@@ -127,6 +130,8 @@ type EndpointFrontend interface {
 	SkipMasqueradeV4() bool
 	// SkipMasqueradeV6 indicates whether this endpoint should skip IPv6 masquerade for remote traffic
 	SkipMasqueradeV6() bool
+	// IsMeshed indicates whether this endpoint is enrolled in ztunnel mesh
+	IsMeshed() bool
 }
 
 // getBPFKeys returns all keys which should represent this endpoint in the BPF
@@ -178,6 +183,9 @@ func (m *lxcMap) getBPFValue(e EndpointFrontend) (*EndpointInfo, error) {
 	}
 	if e.SkipMasqueradeV6() {
 		info.Flags |= EndpointFlagSkipMasqueradeV6
+	}
+	if e.IsMeshed() {
+		info.Flags |= EndpointFlagMeshed
 	}
 
 	return info, nil

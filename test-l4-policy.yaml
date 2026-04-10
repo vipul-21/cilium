@@ -1,0 +1,17 @@
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: l4-policy-nginx
+  namespace: demo
+spec:
+  endpointSelector:
+    matchLabels:
+      app: nginx
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        app: curl
+    toPorts:
+    - ports:
+      - port: "80"
+        protocol: TCP
