@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/netip"
 	"os"
+	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -22,6 +23,48 @@ import (
 const DNSGCJobInterval = 1 * time.Minute
 
 const dnsGCJobName = "dns-garbage-collector-job"
+
+// selectorRepresentatives returns the smallest prefix-order subset of names
+// that still matches every selector any of the names match.
+//
+// A zombie IP stays allowed because it carries the FQDN identity labels of the
+// selectors covering it, and deriveLabelsForName() derives those labels from
+// the matching FQDNSelector, not from the name. Restoring one name per matched
+// selector therefore reproduces exactly the same label set as restoring all of
+// them, while bounding the work by the number of selectors in policy instead of
+// by the number of names that ever resolved to the IP.
+//
+// Names matching no selector are omitted: they contribute no labels, so
+// re-adding them only grows the cache.
+func selectorRepresentatives(names []string, selectors []*regexp.Regexp) []string {
+	if len(selectors) == 0 || len(names) == 0 {
+		return nil
+	}
+
+	reps := make([]string, 0, len(selectors))
+	covered := make([]bool, len(selectors))
+	uncovered := len(selectors)
+
+	for _, name := range names {
+		picked := false
+		for i, regex := range selectors {
+			if covered[i] || !regex.MatchString(name) {
+				continue
+			}
+			covered[i] = true
+			uncovered--
+			picked = true
+		}
+		if picked {
+			reps = append(reps, name)
+		}
+		if uncovered == 0 {
+			break
+		}
+	}
+
+	return reps
+}
 
 // This implements some garbage collection and cleanup functions for the NameManager
 
@@ -50,6 +93,15 @@ func (n *manager) doGC(ctx context.Context) error {
 	)
 	namesToClean := make(sets.Set[string])
 	initialNames := n.cache.DumpNames()
+
+	// Snapshot the selector regexes once per pass. They are guarded by the
+	// manager lock, which doGC does not otherwise hold.
+	n.RLock()
+	selectors := make([]*regexp.Regexp, 0, len(n.allSelectors))
+	for _, regex := range n.allSelectors {
+		selectors = append(selectors, regex)
+	}
+	n.RUnlock()
 
 	allEndpointNames := make(sets.Set[string])
 
@@ -87,10 +139,20 @@ func (n *manager) doGC(ctx context.Context) error {
 		//    Note: Other DNS lookups may also use an active IP. This is
 		//    fine.
 		//
+		// Only a representative subset of each zombie's names is re-added:
+		// what keeps the connection allowed is the IP retaining its FQDN
+		// identity, and deriveLabelsForName() derives that identity from the
+		// matching FQDNSelector rather than from the name. One name per
+		// matching selector therefore yields the same labels as all of them.
+		// Re-adding every name would make this loop, and the global cache,
+		// grow with the number of distinct names that ever resolved to a
+		// still-connected IP.
 		lookupTime := time.Now()
 		for _, zombie := range alive {
-			for _, name := range zombie.Names {
-				namesToClean.Insert(name)
+			// Every name is still expired from the global cache; only the
+			// representatives are restored below.
+			namesToClean.Insert(zombie.Names...)
+			for _, name := range selectorRepresentatives(zombie.Names, selectors) {
 				activeConnections.Update(lookupTime, name, []netip.Addr{zombie.IP}, activeConnectionsTTL)
 			}
 		}

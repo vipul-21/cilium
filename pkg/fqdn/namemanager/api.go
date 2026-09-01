@@ -172,6 +172,15 @@ func (n *manager) deleteDNSLookups(expireLookupsBefore time.Time, matchPatternSt
 
 	maybeStaleIPs := n.cache.GetIPs()
 
+	// Snapshot the selector regexes once, as doGC does. They are guarded by the
+	// manager lock, which this function does not otherwise hold.
+	n.RLock()
+	selectors := make([]*regexp.Regexp, 0, len(n.allSelectors))
+	for _, regex := range n.allSelectors {
+		selectors = append(selectors, regex)
+	}
+	n.RUnlock()
+
 	// Clear any to-delete entries globally
 	// Clear any to-delete entries in each endpoint, then update globally to
 	// insert any entries that now should be in the global cache (because they
@@ -186,8 +195,11 @@ func (n *manager) deleteDNSLookups(expireLookupsBefore time.Time, matchPatternSt
 		zombies, dead := ep.DNSZombies.GC()
 		lookupTime := time.Now()
 		for _, zombie := range zombies {
+			// Every name is still expired; only the representatives are
+			// restored, matching doGC. Restoring all of them would undo the
+			// reduction on the next cache clean.
 			namesToRegen.Insert(zombie.Names...)
-			for _, name := range zombie.Names {
+			for _, name := range selectorRepresentatives(zombie.Names, selectors) {
 				activeConnections.Update(lookupTime, name, []netip.Addr{zombie.IP}, 0)
 			}
 		}
