@@ -394,10 +394,30 @@ func (c *DNSCache) UpdateFromCache(update *DNSCache) {
 	}
 }
 
+// ipName keys oldEntryIndex. A single flat map keyed by the pair costs far less
+// than one map per IP: the fixed overhead of a Go map is paid once rather than
+// once per address in the reverse cache.
+type ipName struct {
+	ip   netip.Addr
+	name string
+}
+
+// oldEntryIndex mirrors the IP -> names snapshot taken from the reverse cache as
+// a set of (IP, name) pairs, so that partialRestoreFromCache can test
+// membership in O(1). Without it that test is a linear scan of every name
+// recorded for the IP, which is O(N^2) overall when many names resolve to the
+// same address.
+type oldEntryIndex map[ipName]struct{}
+
+func (i oldEntryIndex) contains(ip netip.Addr, name string) bool {
+	_, ok := i[ipName{ip: ip, name: name}]
+	return ok
+}
+
 // partialRestoreFromCache is a utility function that upserts the entries of one DNSCache into another.
 // It takes a set of existing entries to ensure that it will only upsert IPs and IP->name mappings that is
 // part of that mapping.
-func (c *DNSCache) partialRestoreFromCache(update *DNSCache, namesToUpdate []string, oldEntries map[netip.Addr][]string) {
+func (c *DNSCache) partialRestoreFromCache(update *DNSCache, namesToUpdate []string, oldEntries oldEntryIndex) {
 	update.mu.RLock()
 	defer update.mu.RUnlock()
 
@@ -409,7 +429,7 @@ func (c *DNSCache) partialRestoreFromCache(update *DNSCache, namesToUpdate []str
 		for _, newEntry := range newEntries {
 			newIps := make([]netip.Addr, 0, len(newEntry.IPs))
 			for _, ip := range newEntry.IPs {
-				if names, found := oldEntries[ip]; found && slices.Contains(names, newEntry.Name) {
+				if oldEntries.contains(ip, newEntry.Name) {
 					newIps = append(newIps, ip)
 				}
 			}
@@ -446,15 +466,19 @@ func (c *DNSCache) ReplaceFromCacheByNames(namesToUpdate []string, updates ...*D
 	}
 
 	// Dump the existing IP->[names...] mapping that can be used to decide
-	// what information should be restored from the local caches.
-	oldEntries := c.getIPsLocked()
+	// what information should be restored from the local caches, together with
+	// a set-per-IP view of the same snapshot for O(1) membership tests. Both
+	// are produced in a single traversal of the reverse cache: deriving the
+	// sets from the slices afterwards would walk every (IP, name) pair twice
+	// and allocate the intermediate slices for nothing.
+	oldEntries, oldIndex := c.getIPsAndIndexLocked()
 
 	// Remove any DNS name in namesToUpdate with a lookup before "now". This
 	// effectively deletes all lookups because we're holding the lock.
 	c.forceExpireByNames(time.Now(), namesToUpdate)
 
 	for update := range c.updated {
-		c.partialRestoreFromCache(update, namesToUpdate, oldEntries)
+		c.partialRestoreFromCache(update, namesToUpdate, oldIndex)
 	}
 
 	c.updated.Clear()
@@ -677,6 +701,26 @@ func (c *DNSCache) getIPsLocked() map[netip.Addr][]string {
 	}
 
 	return out
+}
+
+// getIPsAndIndexLocked takes the same snapshot as getIPsLocked and, in the same
+// traversal, an oldEntryIndex over it. ReplaceFromCacheByNames needs both: the
+// slice form is its return value, the set form makes the per-entry membership
+// test in partialRestoreFromCache O(1).
+func (c *DNSCache) getIPsAndIndexLocked() (map[netip.Addr][]string, oldEntryIndex) {
+	out := make(map[netip.Addr][]string, len(c.reverse))
+	index := make(oldEntryIndex)
+
+	for ip, names := range c.reverse {
+		slice := make([]string, 0, len(names))
+		for name := range names {
+			slice = append(slice, name)
+			index[ipName{ip: ip, name: name}] = struct{}{}
+		}
+		out[ip] = slice
+	}
+
+	return out, index
 }
 
 // ForceExpire is used to clear entries from the cache before their TTL is
