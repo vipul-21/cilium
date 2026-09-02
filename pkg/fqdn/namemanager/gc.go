@@ -87,10 +87,24 @@ func (n *manager) doGC(ctx context.Context) error {
 		//    Note: Other DNS lookups may also use an active IP. This is
 		//    fine.
 		//
+		// These names are deliberately *not* added to namesToClean. Expiring an
+		// entry that is about to be restored unchanged is pure churn, and it is
+		// paid on every pass for every name an alive zombie holds. They are
+		// merged into the global cache below instead, which refreshes their
+		// expiration in place.
+		//
+		// Keeping them resident also preserves the backfill in
+		// RegisterFQDNSelector, which resolves a newly registered selector
+		// against the global cache. A name dropped from it can never return,
+		// because partialRestoreFromCache only restores entries that were
+		// present before the expiry.
 		lookupTime := time.Now()
 		for _, zombie := range alive {
 			for _, name := range zombie.Names {
-				namesToClean.Insert(name)
+				// Record the name as endpoint-backed. It has already aged out
+				// of ep.DNSHistory, so without this the leaked-name sweep below
+				// would treat it as orphaned and clean it anyway.
+				allEndpointNames.Insert(name)
 				activeConnections.Update(lookupTime, name, []netip.Addr{zombie.IP}, activeConnectionsTTL)
 			}
 		}
@@ -112,6 +126,12 @@ func (n *manager) doGC(ctx context.Context) error {
 	for name := range leakedNames {
 		namesToClean.Insert(name)
 	}
+
+	// Refresh the entries backing still-alive connections. This runs before the
+	// early return below because it must happen on every pass, whether or not
+	// anything else changed: without it those entries would expire from the
+	// global cache after activeConnectionsTTL.
+	n.cache.UpdateFromCache(activeConnections)
 
 	if namesToClean.Len() == 0 {
 		return nil
