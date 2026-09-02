@@ -127,10 +127,18 @@ func (n *manager) doGC(ctx context.Context) error {
 		namesToClean.Insert(name)
 	}
 
-	// Refresh the entries backing still-alive connections. This runs before the
-	// early return below because it must happen on every pass, whether or not
-	// anything else changed: without it those entries would expire from the
-	// global cache after activeConnectionsTTL.
+	// Merge the entries backing still-alive connections into the global cache.
+	//
+	// This is idempotent, and today it is also redundant: the global cache has
+	// cleanup tracking disabled (New calls DisableCleanupTrack), so it never
+	// expires entries on time, and an alive zombie's name->IP mapping already
+	// persists there from the original lookup. It is kept because that is a
+	// property of the global cache rather than of this loop, and because the
+	// merge is what makes the entry correct if the cache ever does expire.
+	//
+	// It runs above the early return so that it still happens on a pass where
+	// nothing needs cleaning, which is now the common case for an idle but
+	// still-connected zombie.
 	n.cache.UpdateFromCache(activeConnections)
 
 	if namesToClean.Len() == 0 {
