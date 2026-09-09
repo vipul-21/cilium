@@ -1,0 +1,31 @@
+[00:10:35] === arm 'conc-1pod': min-ttl=0 zones='<none>' pods=1 names=200000 over 600s ===
+[00:10:35] draining clients
+[00:11:01] restarting agents
+[00:12:50] agents: cilium-82wb4 cilium-wl7l8
+[00:12:51]   cilium-82wb4 cache=1
+[00:12:52]   cilium-wl7l8 cache=1
+[00:12:58] scaling to 1 clients
+[00:14:06] t+1m cilium-82wb4 cache=11890 conn=0 warns=151 gc=0.015886s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000047s | 
+[00:15:12] t+2m cilium-82wb4 cache=18711 conn=10441 warns=432 gc=13.111795s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000064s | 
+[00:16:16] t+3m cilium-82wb4 cache=21882 conn=16889 warns=817 gc=19.494841s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000030s | 
+[00:17:19] t+4m cilium-82wb4 cache=24439 conn=20714 warns=1144 gc=17.556676s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000085s | 
+[00:18:22] t+5m cilium-82wb4 cache=26471 conn=23249 warns=1495 gc=13.978370s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000063s | 
+[00:19:26] t+6m cilium-82wb4 cache=28258 conn=25194 warns=1818 gc=12.415929s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000028s | 
+[00:20:34] t+7m cilium-82wb4 cache=30300 conn=27329 warns=2123 gc=15.770084s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000061s | 
+[00:21:38] t+8m cilium-82wb4 cache=32202 conn=29064 warns=2417 gc=18.289214s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000054s | 
+[00:22:43] t+9m cilium-82wb4 cache=33582 conn=30818 warns=2683 gc=16.416425s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000038s | 
+[00:23:47] t+10m cilium-82wb4 cache=34936 conn=32533 warns=2977 gc=17.922050s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000056s | 
+[00:24:51] t+11m cilium-82wb4 cache=36579 conn=33824 warns=3286 gc=15.410107s | cilium-wl7l8 cache=1 conn=0 warns=0 gc=0.000031s | 
+[00:24:52] clients: pods=1 offered=200000 done=36409 failed=0 backlog=163543 failPct=0.00
+[00:24:52] --- client-side latency (p50/p99 per pod, last report) ---
+  across 2 pods: median p50=1.064s  median p99=6.790s  worst p99=6.790s
+[00:24:52] --- wait distribution ---
+  samples=3365 p50=1.06s p90=2.68s p99=6.58s max=9.63s
+  >5s=78 (2.3%)  >10s=0 (0.0%)  >30s=0 (0.0%)
+[00:24:52] --- warnings by type ---
+  30798 Timed out waiting for datapath updates of FQDN IP in
+   3320 Name lock acquisition time took longer than expected
+     24 unable to regenerate initial policy
+     15 Unable to restore endpoint, ignoring
+[00:24:53] errors: 0
+[00:24:53] results in /tmp/bench-conc-1pod

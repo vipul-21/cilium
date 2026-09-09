@@ -1,0 +1,80 @@
+# CiliumNetworkPolicy for the FQDN zombie-growth benchmark.
+#
+# Taken from the affected production cluster's real policy: 12 toFQDNs
+# selectors, mixed matchPattern and matchName. Selector COUNT is a test
+# parameter, not decoration - deriveLabelsForName() (pkg/fqdn/namemanager/
+# manager.go:422) walks every selector for every resolved name, so label
+# derivation cost is names x selectors.
+#
+# Generated names have 3 dynamic labels above the zone
+# (10-<a>-<b>-<c>-<uuid32>-<port>.app.applied-caas16.internal.api.openai.org.)
+# and are therefore matched by "*.*.*.internal.api.openai.org".
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: oai-fqdn
+  namespace: oai
+spec:
+  endpointSelector:
+    matchLabels:
+      app: client
+  egress:
+    # DNS visibility. Without this rule the proxy never intercepts DNS, no
+    # FQDN entries are cached, and the bug cannot reproduce at all.
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+
+    # 12 selectors, as in production.
+    - toFQDNs:
+        - matchPattern: "*.internal.api.openai.org"
+        - matchPattern: "*.*.internal.api.openai.org"
+        - matchPattern: "*.*.*.internal.api.openai.org"   # <- matches generated names
+        - matchPattern: "kafka-proxy.*.internal.api.openai.org"
+        - matchPattern: "kafka-proxy.*.*.internal.api.openai.org"
+        - matchPattern: "*-terminus.gateway.nanobase-*.internal.api.openai.org"
+        - matchPattern: "*-terminus-cdc.gateway.nanobase-*.internal.api.openai.org"
+        - matchPattern: "production-api*rockset-*.internal.api.openai.org"
+        - matchPattern: "production-api.rockset-*.gateway.internal.api.openai.org"
+        - matchName: "keysapi.admin-0.internal.api.openai.org"
+        - matchName: "keysapi.admin-0.gateway.internal.api.openai.org"
+        - matchName: "keysapi.gateway.admin-0.internal.api.openai.org"
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+---
+# Only needed when the target pod lands on a node IP.
+#
+# A node IP carries reserved:host, which outranks the CIDR identity that
+# toFQDNs creates, so the toFQDNs rule never authorises the keepalive and no
+# zombie is ever pinned - the bug then silently fails to reproduce.
+#
+# The zombie mechanism only needs a LIVE CONNECTION to the shared IP (CT GC
+# drives MarkAlive); it does not require that the FQDN rule be what permits it.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: oai-host-allow
+  namespace: oai
+spec:
+  endpointSelector:
+    matchLabels:
+      app: client
+  egress:
+    - toEntities:
+        - host
+        - remote-node
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP

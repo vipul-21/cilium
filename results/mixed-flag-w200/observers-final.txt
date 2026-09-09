@@ -1,0 +1,5 @@
+OBS done=447 failed=0 p50=0.992 p90=3.591 p99=7.641 max=13.468
+OBS done=442 failed=0 p50=0.996 p90=3.287 p99=7.845 max=11.601
+OBS done=446 failed=0 p50=1.007 p90=3.302 p99=7.845 max=11.601
+OBS done=451 failed=0 p50=1.007 p90=3.302 p99=7.845 max=11.601
+OBS done=454 failed=0 p50=1.014 p90=3.342 p99=7.845 max=11.601

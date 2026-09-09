@@ -1,0 +1,149 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: repro
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: target
+  namespace: repro
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: target}
+  template:
+    metadata:
+      labels: {app: target}
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: target
+  namespace: repro
+spec:
+  selector: {app: target}
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: repro-fqdn
+  namespace: repro
+spec:
+  endpointSelector:
+    matchLabels: {app: client}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchPattern: "*.app.test.local"
+        - matchPattern: "*.*.test.local"
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+    - toEndpoints:
+        - matchLabels: {app: target}
+      toPorts:
+        - ports:
+            - port: "80"
+              protocol: TCP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: client-script
+  namespace: repro
+data:
+  client.py: |
+    import socket, threading, uuid, time, os, random
+    KEEP = "10-0-0-57-aaaaaaaa.app.test.local"
+    THREADS = int(os.environ.get("THREADS", "24"))
+    count=[0]; lock=threading.Lock(); ready=threading.Event()
+
+    def keepalive():
+        ip=None
+        while ip is None:
+            try:
+                ip = socket.getaddrinfo(KEEP, None, socket.AF_INET)[0][4][0]
+            except Exception as e:
+                print("resolve retry:", e, flush=True); time.sleep(1)
+        print("KEEPALIVE target ip =", ip, flush=True)
+        ready.set()
+        while True:
+            try:
+                s = socket.create_connection((ip, 80), timeout=10)
+                print("keepalive CONNECTED ->", s.getpeername(), flush=True)
+                while True:
+                    s.sendall(b"GET / HTTP/1.1\r\nHost: t\r\nConnection: keep-alive\r\n\r\n")
+                    if not s.recv(8192): raise IOError("closed")
+                    time.sleep(3)
+            except Exception as e:
+                print("keepalive reconnect:", e, flush=True); time.sleep(2)
+
+    def resolver():
+        ready.wait()
+        while True:
+            n = "10-%d-%d-%d-%s.app.test.local" % (random.randint(1,254), random.randint(1,254), random.randint(1,254), uuid.uuid4().hex)
+            try:
+                socket.getaddrinfo(n, None, socket.AF_INET)
+                with lock: count[0]+=1
+            except Exception: pass
+
+    def reporter():
+        last=0
+        while True:
+            time.sleep(10)
+            with lock: c=count[0]
+            print("resolved_total=%d rate=%.1f/s" % (c,(c-last)/10.0), flush=True); last=c
+
+    threading.Thread(target=keepalive, daemon=True).start()
+    threading.Thread(target=reporter, daemon=True).start()
+    for _ in range(THREADS): threading.Thread(target=resolver, daemon=True).start()
+    while True: time.sleep(3600)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: repro
+spec:
+  replicas: 30
+  selector:
+    matchLabels: {app: client}
+  template:
+    metadata:
+      labels: {app: client}
+    spec:
+      containers:
+        - name: client
+          image: python:3.11-alpine
+          command: ["python", "-u", "/app/client.py"]
+          env:
+            - name: THREADS
+              value: "4"
+          volumeMounts:
+            - name: s
+              mountPath: /app
+      volumes:
+        - name: s
+          configMap:
+            name: client-script

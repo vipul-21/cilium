@@ -1,0 +1,32 @@
+[01:04:16] === MIXED arm 'mixed-set': 1 heavy + 5 observers, same node ===
+[01:04:16]     min-ttl=0 zones='<none>' names=200000 over 600s
+[01:04:41] restarting agents
+[01:06:28]   cilium-5rkn5 cache=1
+[01:06:29]   cilium-q58wn cache=1
+[01:06:34] starting heavy generator (1 pod, 200000 names)
+[01:06:36] heavy pod on node aks-nodepool1-35185700-vmss000001 (agent cilium-5rkn5)
+[01:06:43] 5 observers on aks-nodepool1-35185700-vmss000001
+[01:07:45] t+1m cilium-5rkn5 cache=13089 conn=0 gc=0.016611s | cilium-q58wn cache=1 conn=0 gc=0.000075s |  OBS[OBS done=120 failed=0 p50=0.218 p90=0.688 p99=1.607 max=2.312]
+[01:08:47] t+2m cilium-5rkn5 cache=17771 conn=10454 gc=1.032405s | cilium-q58wn cache=1 conn=0 gc=0.000050s |  OBS[OBS done=207 failed=0 p50=0.306 p90=1.240 p99=2.056 max=2.966]
+[01:09:50] t+3m cilium-5rkn5 cache=21586 conn=15895 gc=1.994367s | cilium-q58wn cache=1 conn=0 gc=0.000037s |  OBS[OBS done=304 failed=0 p50=0.359 p90=1.139 p99=2.312 max=2.871]
+[01:10:52] t+4m cilium-5rkn5 cache=24737 conn=19890 gc=2.540485s | cilium-q58wn cache=1 conn=0 gc=0.000049s |  OBS[OBS done=385 failed=0 p50=0.420 p90=1.313 p99=2.956 max=3.851]
+[01:11:56] t+5m cilium-5rkn5 cache=27328 conn=23162 gc=3.335360s | cilium-q58wn cache=1 conn=0 gc=0.000050s |  OBS[OBS done=439 failed=0 p50=0.490 p90=1.513 p99=3.102 max=4.063]
+[01:13:00] t+6m cilium-5rkn5 cache=29453 conn=26164 gc=3.921153s | cilium-q58wn cache=1 conn=0 gc=0.000044s |  OBS[OBS done=483 failed=0 p50=0.508 p90=1.606 p99=3.788 max=6.290]
+[01:14:03] t+7m cilium-5rkn5 cache=31468 conn=28310 gc=4.419092s | cilium-q58wn cache=1 conn=0 gc=0.000019s |  OBS[OBS done=536 failed=0 p50=0.524 p90=1.730 p99=4.071 max=6.820]
+[01:15:07] t+8m cilium-5rkn5 cache=33360 conn=30258 gc=4.522170s | cilium-q58wn cache=1 conn=0 gc=0.000051s |  OBS[OBS done=579 failed=0 p50=0.545 p90=1.890 p99=4.393 max=6.820]
+[01:16:11] t+9m cilium-5rkn5 cache=34833 conn=32142 gc=5.272629s | cilium-q58wn cache=1 conn=0 gc=0.000032s |  OBS[OBS done=606 failed=0 p50=0.557 p90=2.037 p99=5.472 max=6.820]
+[01:17:17] t+10m cilium-5rkn5 cache=36176 conn=33754 gc=5.705458s | cilium-q58wn cache=1 conn=0 gc=0.000036s |  OBS[OBS done=635 failed=0 p50=0.588 p90=2.238 p99=5.528 max=7.503]
+[01:18:21] t+11m cilium-5rkn5 cache=37677 conn=35139 gc=6.038371s | cilium-q58wn cache=1 conn=0 gc=0.000026s |  OBS[OBS done=666 failed=0 p50=0.638 p90=2.338 p99=6.467 max=7.503]
+[01:18:21] --- heavy generator ---
+offered=200000 done=37589 failed=0 backlog=162363
+[01:18:22] --- OBSERVERS (collateral damage on unrelated endpoints) ---
+OBS done=652 failed=0 p50=0.631 p90=2.475 p99=6.290 max=7.996
+OBS done=626 failed=0 p50=0.658 p90=2.512 p99=5.795 max=7.417
+OBS done=630 failed=0 p50=0.660 p90=2.544 p99=5.795 max=7.417
+OBS done=636 failed=0 p50=0.667 p90=2.544 p99=5.795 max=7.417
+OBS done=644 failed=0 p50=0.674 p90=2.529 p99=5.795 max=7.417
+[01:18:22] --- agent lock waits ---
+  samples=4309 p50=0.99s p90=2.49s p99=6.10s max=10.24s
+  >5s=1.8%  >10s=0.0%  >30s=0
+[01:18:22] errors: 0
+[01:18:22] results in /tmp/bench-mixed-set

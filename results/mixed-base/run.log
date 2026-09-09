@@ -1,0 +1,21 @@
+[00:30:48] === MIXED arm 'mixed-base': 1 heavy + 5 observers, same node ===
+[00:30:48]     min-ttl=0 zones='<none>' names=200000 over 600s
+[00:31:13] restarting agents
+[00:33:01]   cilium-4f75l cache=1
+[00:33:02]   cilium-l7sp6 cache=1
+[00:33:07] starting heavy generator (1 pod, 200000 names)
+[00:33:10] heavy pod on node aks-nodepool1-35185700-vmss000000 (agent cilium-4f75l)
+[00:33:14] 5 observers on aks-nodepool1-35185700-vmss000000
+[00:45:02] --- heavy generator ---
+offered=200000 done=42192 failed=0 backlog=157760
+[00:45:03] --- OBSERVERS (collateral damage on unrelated endpoints) ---
+OBS done=880 failed=0 p50=0.399 p90=1.940 p99=5.297 max=7.999
+OBS done=853 failed=0 p50=0.436 p90=1.864 p99=6.168 max=12.715
+OBS done=858 failed=0 p50=0.439 p90=1.894 p99=6.168 max=12.715
+OBS done=870 failed=0 p50=0.438 p90=1.912 p99=6.168 max=12.715
+OBS done=877 failed=0 p50=0.437 p90=1.943 p99=6.168 max=12.715
+[00:45:03] --- agent lock waits ---
+  samples=4440 p50=0.97s p90=2.34s p99=6.48s max=12.70s
+  >5s=2.0%  >10s=0.0%  >30s=0
+[00:45:04] errors: 0
+[00:45:04] results in /tmp/bench-mixed-base

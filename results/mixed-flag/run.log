@@ -1,0 +1,21 @@
+[00:46:01] === MIXED arm 'mixed-flag': 1 heavy + 5 observers, same node ===
+[00:46:01]     min-ttl=0 zones='internal.api.openai.org' names=200000 over 600s
+[00:46:27] restarting agents
+[00:48:15]   cilium-76h6b cache=1
+[00:48:15]   cilium-r7nqf cache=1
+[00:48:20] starting heavy generator (1 pod, 200000 names)
+[00:48:23] heavy pod on node aks-nodepool1-35185700-vmss000001 (agent cilium-76h6b)
+[00:48:28] 5 observers on aks-nodepool1-35185700-vmss000001
+[00:59:58] --- heavy generator ---
+offered=200000 done=89660 failed=0 backlog=110292
+[00:59:58] --- OBSERVERS (collateral damage on unrelated endpoints) ---
+OBS done=1376 failed=0 p50=0.348 p90=0.912 p99=1.716 max=2.275
+OBS done=1319 failed=0 p50=0.329 p90=0.770 p99=1.335 max=1.848
+OBS done=1333 failed=0 p50=0.332 p90=0.775 p99=1.339 max=2.250
+OBS done=1358 failed=0 p50=0.331 p90=0.778 p99=1.339 max=2.250
+OBS done=1376 failed=0 p50=0.331 p90=0.788 p99=1.379 max=2.940
+[00:59:59] --- agent lock waits ---
+  samples=3720 p50=0.66s p90=1.08s p99=1.70s max=2.46s
+  >5s=0.0%  >10s=0.0%  >30s=0
+[00:59:59] errors: 0
+[00:59:59] results in /tmp/bench-mixed-flag

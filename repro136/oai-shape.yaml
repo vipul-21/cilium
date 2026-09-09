@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: oai}
+---
+# The FQDN target must be OUTSIDE the cluster CIDR so it receives a CIDR/world
+# identity that toFQDNs can label. TEST-NET-3, DNAT'ed on the node to a real
+# backend, mirrors how the upstream repro for #47128 did it.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: target, namespace: oai}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: target}}
+  template:
+    metadata: {labels: {app: target}}
+    spec:
+      hostNetwork: true
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports: [{containerPort: 80}]
+---
+# OAI's real toFQDNs patterns for this zone, taken from their CNPs.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: oai-fqdn, namespace: oai}
+spec:
+  endpointSelector: {matchLabels: {app: client}}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+          rules: {dns: [{matchPattern: "*"}]}
+    - toFQDNs:
+        - matchPattern: "*.internal.api.openai.org"
+        - matchPattern: "*.*.internal.api.openai.org"
+        - matchPattern: "*.*.*.internal.api.openai.org"
+        - matchPattern: "kafka-proxy.*.internal.api.openai.org"
+        - matchPattern: "kafka-proxy.*.*.internal.api.openai.org"
+        - matchPattern: "*-terminus.gateway.nanobase-*.internal.api.openai.org"
+        - matchPattern: "*-terminus-cdc.gateway.nanobase-*.internal.api.openai.org"
+        - matchPattern: "production-api*rockset-*.internal.api.openai.org"
+        - matchPattern: "production-api.rockset-*.gateway.internal.api.openai.org"
+        - matchName: "keysapi.admin-0.internal.api.openai.org"
+        - matchName: "keysapi.admin-0.gateway.internal.api.openai.org"
+        - matchName: "keysapi.gateway.admin-0.internal.api.openai.org"
+      toPorts:
+        - ports: [{port: "80", protocol: TCP}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: oai-client, namespace: oai}
+data:
+  client.py: |
+    import socket, threading, uuid, time, os, random
+
+    # Mirrors the production name shape:
+    #   10-225-10-13-<uuid>-22486.app.applied-caas16.internal.api.openai.org
+    # Three labels before the zone, so it is selected by *.*.*.internal...
+    ZONE  = "app.applied-caas16.internal.api.openai.org"
+    KEEP  = "keepalive-fixed." + ZONE
+    THREADS = int(os.environ.get("THREADS", "4"))
+    ready = threading.Event()
+    sent = [0]; lost = [0]; lock = threading.Lock()
+
+    def name():
+        return "10-%d-%d-%d-%s-%d.%s" % (
+            random.randint(1,254), random.randint(1,254), random.randint(1,254),
+            uuid.uuid4().hex, random.randint(20000,30000), ZONE)
+
+    def keepalive():
+        ip = None
+        while ip is None:
+            try: ip = socket.getaddrinfo(KEEP, None, socket.AF_INET)[0][4][0]
+            except Exception: time.sleep(1)
+        print("keepalive ip =", ip, flush=True)
+        ready.set()
+        while True:
+            try:
+                s = socket.create_connection((ip, 80), timeout=10)
+                print("keepalive CONNECTED", flush=True)
+                while True:
+                    s.sendall(b"GET / HTTP/1.1\r\nHost: t\r\nConnection: keep-alive\r\n\r\n")
+                    if not s.recv(8192): raise IOError("closed")
+                    time.sleep(3)
+            except Exception as e:
+                print("keepalive reconnect:", e, flush=True); time.sleep(2)
+
+    def resolver():
+        ready.wait()
+        while True:
+            with lock: sent[0] += 1
+            try:
+                socket.getaddrinfo(name(), None, socket.AF_INET)
+            except Exception:
+                with lock: lost[0] += 1
+
+    def reporter():
+        last = 0
+        while True:
+            time.sleep(10)
+            with lock: s, l = sent[0], lost[0]
+            print("sent=%d lost=%d rate=%.1f/s" % (s, l, (s-last)/10.0), flush=True)
+            last = s
+
+    threading.Thread(target=keepalive, daemon=True).start()
+    threading.Thread(target=reporter, daemon=True).start()
+    for _ in range(THREADS):
+        threading.Thread(target=resolver, daemon=True).start()
+    while True: time.sleep(3600)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: client, namespace: oai}
+spec:
+  replicas: 30
+  selector: {matchLabels: {app: client}}
+  template:
+    metadata: {labels: {app: client}}
+    spec:
+      containers:
+        - name: client
+          image: python:3.11-alpine
+          command: ["python","-u","/app/client.py"]
+          env: [{name: THREADS, value: "4"}]
+          volumeMounts: [{name: s, mountPath: /app}]
+      volumes:
+        - {name: s, configMap: {name: oai-client}}

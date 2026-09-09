@@ -1,0 +1,31 @@
+[23:23:14] === arm 'flag-60': min-ttl=0 zones='internal.api.openai.org' pods=30 names=200000 over 600s ===
+[23:23:14] draining clients
+[23:23:40] restarting agents
+[23:25:27] agents: cilium-bqld7 cilium-wnxdw
+[23:25:28]   cilium-bqld7 cache=1
+[23:25:29]   cilium-wnxdw cache=1
+[23:25:34] scaling to 30 clients
+[23:26:52] t+1m cilium-bqld7 cache=10733 conn=0 warns=121 gc=0.007307s | cilium-wnxdw cache=10472 conn=0 warns=79 gc=0.007892s | 
+[23:27:57] t+2m cilium-bqld7 cache=12578 conn=0 warns=5168 gc=0.302214s | cilium-wnxdw cache=15153 conn=0 warns=4357 gc=0.202177s | 
+[23:29:03] t+3m cilium-bqld7 cache=12860 conn=0 warns=10938 gc=0.283508s | cilium-wnxdw cache=14717 conn=0 warns=10175 gc=0.267425s | 
+[23:30:09] t+4m cilium-bqld7 cache=14369 conn=0 warns=16931 gc=0.170520s | cilium-wnxdw cache=15380 conn=0 warns=16045 gc=0.208469s | 
+[23:31:13] t+5m cilium-bqld7 cache=15100 conn=0 warns=22416 gc=0.304104s | cilium-wnxdw cache=15875 conn=0 warns=21866 gc=0.289798s | 
+[23:32:18] t+6m cilium-bqld7 cache=14511 conn=0 warns=27827 gc=0.223373s | cilium-wnxdw cache=17305 conn=0 warns=27705 gc=0.210218s | 
+[23:33:24] t+7m cilium-bqld7 cache=15610 conn=0 warns=33541 gc=0.171954s | cilium-wnxdw cache=15879 conn=0 warns=33071 gc=0.421485s | 
+[23:34:28] t+8m cilium-bqld7 cache=8661 conn=0 warns=39773 gc=0.249447s | cilium-wnxdw cache=9244 conn=0 warns=38956 gc=0.184991s | 
+[23:35:33] t+9m cilium-bqld7 cache=9986 conn=0 warns=46043 gc=0.267812s | cilium-wnxdw cache=10346 conn=0 warns=44998 gc=0.232998s | 
+[23:36:39] t+10m cilium-bqld7 cache=11006 conn=0 warns=52522 gc=0.283781s | cilium-wnxdw cache=11752 conn=0 warns=51447 gc=0.350035s | 
+[23:37:44] t+11m cilium-bqld7 cache=7990 conn=0 warns=56282 gc=0.246834s | cilium-wnxdw cache=6359 conn=0 warns=53410 gc=0.106737s | 
+[23:38:00] clients: pods=30 offered=199980 done=199978 failed=2 backlog=0 failPct=0.00
+[23:38:00] --- client-side latency (p50/p99 per pod, last report) ---
+  across 30 pods: median p50=1.583s  median p99=10.235s  worst p99=10.626s
+[23:38:04] --- wait distribution ---
+  samples=109738 p50=1.94s p90=5.47s p99=10.73s max=21.87s
+  >5s=13500 (12.3%)  >10s=1464 (1.3%)  >30s=0 (0.0%)
+[23:38:05] --- warnings by type ---
+ 183678 Timed out waiting for datapath updates of FQDN IP in
+ 109692 Name lock acquisition time took longer than expected
+     43 unable to regenerate initial policy
+      2 Timeout waiting for response to forwarded proxied DN
+[23:38:21] errors: 0
+[23:38:21] results in /tmp/bench-flag-60

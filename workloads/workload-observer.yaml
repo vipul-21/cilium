@@ -1,0 +1,31 @@
+# Observer pods: ordinary endpoints sharing a node with the heavy FQDN
+# generator. They resolve a small fixed set of names, so they add almost
+# nothing to the zombie list - their latency measures collateral damage.
+#
+# nodeAffinity is set by the harness at apply time so they land on the SAME
+# node as the heavy generator.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: observer, namespace: oai}
+spec:
+  replicas: 5
+  selector: {matchLabels: {app: client, role: observer}}
+  template:
+    metadata: {labels: {app: client, role: observer}}
+    spec:
+      nodeName: PLACEHOLDER_NODE
+      dnsConfig:
+        options:
+          - {name: timeout,  value: "30"}
+          - {name: attempts, value: "1"}
+          - {name: ndots,    value: "1"}
+      containers:
+        - name: obs
+          image: python:3.11-alpine
+          command: ["python","-u","/app/observer.py"]
+          env:
+            - {name: OBS_NAMES, value: "10"}
+            - {name: OBS_RATE,  value: "2"}
+          volumeMounts: [{name: s, mountPath: /app}]
+      volumes:
+        - {name: s, configMap: {name: oai-observer}}

@@ -1,0 +1,30 @@
+[23:01:58] === arm 'base-60': min-ttl=0 zones='<none>' pods=30 names=200000 over 600s ===
+[23:01:58] draining clients
+[23:02:24] restarting agents
+[23:04:13] agents: cilium-ndkhz cilium-t9spl
+[23:04:14]   cilium-ndkhz cache=1
+[23:04:15]   cilium-t9spl cache=1
+[23:04:20] scaling to 30 clients
+[23:05:38] t+1m cilium-ndkhz cache=10154 conn=0 warns=0 gc=0.006057s | cilium-t9spl cache=11138 conn=0 warns=163 gc=0.006767s | 
+[23:06:46] t+2m cilium-ndkhz cache=18866 conn=5375 warns=3252 gc=0.863369s | cilium-t9spl cache=19118 conn=5581 warns=4860 gc=1.046094s | 
+[23:07:54] t+3m cilium-ndkhz cache=24131 conn=15376 warns=7065 gc=3.097991s | cilium-t9spl cache=23838 conn=14848 warns=8251 gc=3.149462s | 
+[23:09:03] t+4m cilium-ndkhz cache=27802 conn=21103 warns=9660 gc=4.337124s | cilium-t9spl cache=27399 conn=20510 warns=10791 gc=4.465305s | 
+[23:10:12] t+5m cilium-ndkhz cache=30825 conn=26651 warns=11800 gc=5.297775s | cilium-t9spl cache=29570 conn=27853 warns=12463 gc=7.538644s | 
+[23:11:20] t+6m cilium-ndkhz cache=33703 conn=31096 warns=14115 gc=6.904801s | cilium-t9spl cache=31656 conn=29570 warns=13934 gc=6.518620s | 
+[23:12:28] t+7m cilium-ndkhz cache=37292 conn=33827 warns=16792 gc=7.459065s | cilium-t9spl cache=33878 conn=31725 warns=15741 gc=7.240002s | 
+[23:13:35] t+8m cilium-ndkhz cache=40670 conn=37066 warns=19234 gc=8.847897s | cilium-t9spl cache=35505 conn=33521 warns=16884 gc=7.987626s | 
+[23:14:44] t+9m cilium-ndkhz cache=42198 conn=39967 warns=20506 gc=9.126577s | cilium-t9spl cache=37359 conn=35115 warns=18473 gc=9.741251s | 
+[23:15:53] t+10m cilium-ndkhz cache=44394 conn=42041 warns=22165 gc=10.032034s | cilium-t9spl cache=39219 conn=36642 warns=19940 gc=9.690196s | 
+[23:17:04] t+11m cilium-ndkhz cache=46557 conn=43788 warns=23779 gc=10.165001s | cilium-t9spl cache=41154 conn=38378 warns=21325 gc=9.221408s | 
+[23:17:22] clients: pods=30 offered=199980 done=86217 failed=1885 backlog=111158 failPct=0.94
+[23:17:22] --- client-side latency (p50/p99 per pod, last report) ---
+  across 30 pods: median p50=2.652s  median p99=30.029s  worst p99=30.031s
+[23:17:26] --- wait distribution ---
+  samples=45857 p50=4.77s p90=17.92s p99=38.50s max=67.18s
+  >5s=22264 (48.6%)  >10s=11582 (25.3%)  >30s=1320 (2.9%)
+[23:17:27] --- warnings by type ---
+  72406 Timed out waiting for datapath updates of FQDN IP in
+  45812 Name lock acquisition time took longer than expected
+      1 Timeout waiting for response to forwarded proxied DN
+[23:17:34] errors: 0
+[23:17:34] results in /tmp/bench-base-60
