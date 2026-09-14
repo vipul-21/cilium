@@ -693,11 +693,16 @@ func (c *DNSCache) getIPsLocked() map[netip.Addr][]string {
 // expireLookupsBefore requires a lookup to have a LookupTime before it in
 // order to remove it.
 // nameMatch will remove any DNS names that match.
-func (c *DNSCache) ForceExpire(expireLookupsBefore time.Time, nameMatch *regexp.Regexp) (namesAffected sets.Set[string]) {
+// It also returns the IP->name associations it removed. Callers withdraw the
+// ipcache metadata for those. Deriving them from a snapshot taken before the
+// call instead would miss a lookup that landed in between and was expired here,
+// leaving its FQDN labels on the prefix with nothing left to rediscover them.
+func (c *DNSCache) ForceExpire(expireLookupsBefore time.Time, nameMatch *regexp.Regexp) (namesAffected sets.Set[string], removed map[netip.Addr][]string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	namesAffected = sets.New[string]()
+	removed = make(map[netip.Addr][]string)
 
 	for name, entries := range c.forward {
 		// If nameMatch was passed in, we must match it. Otherwise, "match all".
@@ -708,12 +713,13 @@ func (c *DNSCache) ForceExpire(expireLookupsBefore time.Time, nameMatch *regexp.
 		// because LookupTime must be before ExpirationTime.
 		// The second expireLookupsBefore actually matches lookup times, and will
 		// delete the entries completely.
-		for _, entry := range c.removeExpired(entries, expireLookupsBefore, expireLookupsBefore) {
+		for ip, entry := range c.removeExpired(entries, expireLookupsBefore, expireLookupsBefore) {
 			namesAffected.Insert(entry.Name)
+			removed[ip] = append(removed[ip], entry.Name)
 		}
 	}
 
-	return namesAffected
+	return namesAffected, removed
 }
 
 func (c *DNSCache) forceExpireByNames(expireLookupsBefore time.Time, names []string) {

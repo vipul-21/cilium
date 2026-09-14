@@ -170,15 +170,18 @@ func (n *manager) deleteDNSLookups(expireLookupsBefore time.Time, matchPatternSt
 		}
 	}
 
-	maybeStaleIPs := n.cache.GetIPs()
-
 	// Clear any to-delete entries globally
 	// Clear any to-delete entries in each endpoint, then update globally to
 	// insert any entries that now should be in the global cache (because they
 	// provide an IP at the latest expiration time).
-	namesToRegen := n.cache.ForceExpire(expireLookupsBefore, nameMatcher)
+	//
+	// maybeStaleIPs is what the expiry actually removed, collected under the
+	// cache lock. A snapshot taken before this call would miss a lookup that
+	// landed in between and was then expired by it.
+	namesToRegen, maybeStaleIPs := n.cache.ForceExpire(expireLookupsBefore, nameMatcher)
 	for _, ep := range n.params.EPMgr.GetEndpoints() {
-		namesToRegen = namesToRegen.Union(ep.DNSHistory.ForceExpire(expireLookupsBefore, nameMatcher))
+		epNames, _ := ep.DNSHistory.ForceExpire(expireLookupsBefore, nameMatcher)
+		namesToRegen = namesToRegen.Union(epNames)
 		n.cache.UpdateFromCache(ep.DNSHistory)
 
 		namesToRegen.Insert(ep.DNSZombies.ForceExpire(expireLookupsBefore, nameMatcher)...)

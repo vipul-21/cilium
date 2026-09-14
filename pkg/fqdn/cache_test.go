@@ -94,7 +94,7 @@ func TestPrivilegedDelete(t *testing.T) {
 	// still be present.
 	nameMatch, err := regexp.Compile("^notatest.com$")
 	require.NoError(t, err)
-	namesAffected := cache.ForceExpire(now, nameMatch)
+	namesAffected, _ := cache.ForceExpire(now, nameMatch)
 	require.Emptyf(t, namesAffected, "Incorrect count of names removed %v", namesAffected)
 	for _, name := range []string{"test1.com", "test2.com", "test3.com"} {
 		ips := cache.lookupByTime(now, name)
@@ -110,7 +110,7 @@ func TestPrivilegedDelete(t *testing.T) {
 	// - Lookups for it show no data, but data remains for other names
 	nameMatch, err = regexp.Compile("^test1.com$")
 	require.NoError(t, err)
-	namesAffected = cache.ForceExpire(now, nameMatch)
+	namesAffected, _ = cache.ForceExpire(now, nameMatch)
 	require.Lenf(t, namesAffected, 1, "Incorrect count of names removed %v", namesAffected)
 	require.Containsf(t, namesAffected, "test1.com", "Incorrect affected name returned on forced expire: %s", namesAffected)
 	ips := cache.lookupByTime(now, "test1.com")
@@ -129,7 +129,7 @@ func TestPrivilegedDelete(t *testing.T) {
 	}
 
 	// Delete the whole cache. This should leave no data.
-	namesAffected = cache.ForceExpire(now, nil)
+	namesAffected, _ = cache.ForceExpire(now, nil)
 	require.Lenf(t, namesAffected, 2, "Incorrect count of names removed %v", namesAffected)
 	for _, name := range []string{"test2.com", "test3.com"} {
 		require.Contains(t, namesAffected, name, "Incorrect affected name returned on forced expire")
