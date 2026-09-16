@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cilium/hive/cell"
@@ -25,6 +27,7 @@ import (
 	"github.com/cilium/cilium/pkg/counter"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
+	envoyconfig "github.com/cilium/cilium/pkg/envoy/config"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/identity"
@@ -45,8 +48,9 @@ import (
 type FQDNDataServer struct {
 	pb.UnimplementedFQDNDataServer
 
-	// port is the port on which the standalone DNS proxy grpc server will run
-	port int
+	// socketPath is the Unix domain socket on which the standalone DNS proxy
+	// grpc server listens
+	socketPath string
 
 	// grpcServer is the grpc server for the standalone DNS proxy
 	grpcServer *grpc.Server
@@ -84,7 +88,6 @@ type FQDNDataServer struct {
 	// | EnableStandaloneDNSProxy               | true           | Feature flag to enable standalone DNS proxy   |
 	// | DaemonConfig.EnableL7Proxy             | true           | L7 proxy must be enabled as a prerequisite    |
 	// | DaemonConfig.ToFQDNsProxyPort          | > 0            | Valid port for FQDN proxy                     |
-	// | Config.StandaloneDNSProxyServerPort    | > 0            | Valid port for standalone DNS proxy server    |
 	//
 	// If ANY of these conditions is not met, enabled will be false and the standalone
 	// DNS proxy will not function. The IsEnabled() method returns this field's value.
@@ -188,17 +191,83 @@ type listenConfig interface {
 }
 
 // defaultListener implements Listener by using net.ListenConfig.
-type defaultListener struct{}
+type defaultListener struct {
+	log *slog.Logger
+
+	// proxyGID is the group granted access to the control plane socket, shared
+	// with the other Cilium proxy control plane sockets (--proxy-gid).
+	proxyGID uint
+}
 
 func (d *defaultListener) Listen(ctx context.Context, network, addr string) (net.Listener, error) {
+	if network != "unix" {
+		var lc net.ListenConfig
+		return lc.Listen(ctx, network, addr)
+	}
+	return d.listenUnix(ctx, addr)
+}
+
+// listenUnix creates the FQDNData control plane socket.
+//
+// This socket streams the node's entire DNS policy and identity mappings, and is
+// the sink that populates the toFQDNs cache which drives L3/L4 policy. It must
+// therefore not be reachable by a workload that merely shares the node's network
+// namespace, which is why it is a filesystem-permissioned Unix domain socket
+// rather than a TCP listener on localhost.
+func (d *defaultListener) listenUnix(ctx context.Context, path string) (net.Listener, error) {
+	// Restrict the directory before the socket is created, so that the socket is
+	// never reachable during the window where it still carries the permissions
+	// net.Listen created it with.
+	socketDir := filepath.Dir(path)
+	if err := os.MkdirAll(socketDir, 0o750); err != nil {
+		return nil, fmt.Errorf("failed to create socket directory %s: %w", socketDir, err)
+	}
+	// MkdirAll is a no-op if the directory already exists, and the mode it takes
+	// is subject to umask, so set the mode explicitly.
+	if err := os.Chmod(socketDir, 0o750); err != nil {
+		return nil, fmt.Errorf("failed to change mode of socket directory %s: %w", socketDir, err)
+	}
+	// Change the group to ProxyGID allowing access from any process from that group.
+	if err := os.Chown(socketDir, -1, int(d.proxyGID)); err != nil {
+		d.log.Warn("Failed to change the group of the standalone DNS proxy socket directory",
+			logfields.Path, socketDir,
+			logfields.Error, err,
+		)
+	}
+
+	// Remove/Unlink the old unix domain socket, if any.
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to remove stale socket %s: %w", path, err)
+	}
+
 	var lc net.ListenConfig
-	return lc.Listen(ctx, network, addr)
+	lis, err := lc.Listen(ctx, "unix", path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open standalone DNS proxy listen socket at %s: %w", path, err)
+	}
+
+	// Make the socket accessible by owner and group only.
+	if err := os.Chmod(path, 0o660); err != nil {
+		lis.Close()
+		return nil, fmt.Errorf("failed to change mode of standalone DNS proxy listen socket at %s: %w", path, err)
+	}
+	// Change the group to ProxyGID allowing access from any process from that group.
+	// A failure here leaves the socket owner-only, which fails closed, so it is
+	// only a warning.
+	if err := os.Chown(path, -1, int(d.proxyGID)); err != nil {
+		d.log.Warn("Failed to change the group of the standalone DNS proxy listen socket",
+			logfields.Path, path,
+			logfields.Error, err,
+		)
+	}
+
+	return lis, nil
 }
 
 var _ listenConfig = &defaultListener{}
 
-func newDefaultListener() listenConfig {
-	return &defaultListener{}
+func newDefaultListener(log *slog.Logger, proxyConfig envoyconfig.ProxyConfig) listenConfig {
+	return &defaultListener{log: log, proxyGID: proxyConfig.ProxyGID}
 }
 
 type PolicyUpdater interface {
@@ -412,7 +481,7 @@ func newIdentityToIPsTable(db *statedb.DB) (statedb.RWTable[identityToIPs], erro
 func NewServer(params serverParams) *FQDNDataServer {
 
 	fqdnDataServer := &FQDNDataServer{
-		port:               params.Config.StandaloneDNSProxyServerPort,
+		socketPath:         GetSocketPath(GetSocketDir(params.DaemonConfig.RunDir)),
 		endpointsLookup:    params.EndpointsLookup,
 		updateOnDNSMsg:     params.DNSRequestHandler,
 		log:                params.Logger,
@@ -823,15 +892,14 @@ func errorFromProtoType(et pb.ProxyErrorType, msg string) error {
 	}
 }
 
-// ListenAndServe starts the Standalone DNS Proxy gRPC server on the given port
+// ListenAndServe starts the Standalone DNS Proxy gRPC server on its Unix domain socket
 func (s *FQDNDataServer) ListenAndServe(ctx context.Context, health cell.Health) error {
 	listenErrs := make(chan error)
 	go func() {
 		defer close(listenErrs)
 
-		address := fmt.Sprintf("localhost:%d", s.port)
-		s.log.Info("Starting Standalone DNS Proxy server on", logfields.Address, address)
-		lis, err := s.listener.Listen(ctx, "tcp", address)
+		s.log.Info("Starting Standalone DNS Proxy server on", logfields.Address, s.socketPath)
+		lis, err := s.listener.Listen(ctx, "unix", s.socketPath)
 		if err != nil {
 			s.log.Error("Failed to listen", logfields.Error, err)
 			listenErrs <- err
@@ -845,7 +913,7 @@ func (s *FQDNDataServer) ListenAndServe(ctx context.Context, health cell.Health)
 		}
 	}()
 
-	health.OK(fmt.Sprintf("Serving at %d", s.port))
+	health.OK(fmt.Sprintf("Serving at %s", s.socketPath))
 
 	select {
 	case err := <-listenErrs:

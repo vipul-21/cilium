@@ -680,12 +680,12 @@ func TestIsEnabled(t *testing.T) {
 			toFQDNsProxyPort:             40046,
 			expectedEnabled:              false,
 		},
-		"Invalid standalone DNS proxy server port": {
+		"Deprecated standalone DNS proxy server port is ignored": {
 			enableL7Proxy:                true,
 			enableStandaloneDNSProxy:     true,
 			standaloneDNSProxyServerPort: 0,
 			toFQDNsProxyPort:             40046,
-			expectedEnabled:              false,
+			expectedEnabled:              true,
 		},
 		"Invalid ToFQDNs proxy port": {
 			enableL7Proxy:                true,

@@ -62,7 +62,7 @@ func newServer(params serverParams) *FQDNDataServer {
 		return nil
 	}
 
-	if params.DaemonConfig.ToFQDNsProxyPort == 0 || params.Config.StandaloneDNSProxyServerPort == 0 {
+	if params.DaemonConfig.ToFQDNsProxyPort == 0 {
 		params.Logger.Error("Standalone DNS proxy requires a valid port number to be set")
 		return nil
 	}
@@ -102,7 +102,9 @@ type FQDNConfig struct {
 	// EnableStandaloneDNSProxy is the option to enable standalone DNS proxy
 	EnableStandaloneDNSProxy bool
 
-	// StandaloneDNSProxyServerPort is the user-configured global, Standalone DNS proxy gRPC server port
+	// StandaloneDNSProxyServerPort is deprecated and no longer used. The agent
+	// serves the standalone DNS proxy gRPC API on a Unix domain socket, so that
+	// it is not reachable from the node's network namespace.
 	StandaloneDNSProxyServerPort int
 
 	// ToFQDNsEnableDNSCompression allows the DNS proxy to compress responses to
@@ -129,7 +131,8 @@ var DefaultConfig = FQDNConfig{
 
 func (def FQDNConfig) Flags(flags *pflag.FlagSet) {
 	flags.Bool(EnableStandaloneDNSProxy, def.EnableStandaloneDNSProxy, "Enables standalone DNS proxy")
-	flags.Int(StandaloneDNSProxyServerPort, def.StandaloneDNSProxyServerPort, "Global port on which the gRPC server for standalone DNS proxy should listen")
+	flags.Int(StandaloneDNSProxyServerPort, def.StandaloneDNSProxyServerPort, "Deprecated, no longer used: the standalone DNS proxy gRPC server listens on a Unix domain socket")
+	flags.MarkDeprecated(StandaloneDNSProxyServerPort, "the standalone DNS proxy gRPC server listens on a Unix domain socket and no longer uses a TCP port")
 	flags.Bool(ToFQDNsEnableDNSCompression, def.ToFQDNsEnableDNSCompression, "Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present")
 	flags.Int(DNSMaxIPsPerRestoredRule, def.DNSMaxIPsPerRestoredRule, "Maximum number of IPs to maintain for each restored DNS rule")
 	flags.Duration(DNSProxyConcurrencyProcessingGracePeriod, def.DNSProxyConcurrencyProcessingGracePeriod, "Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing")
