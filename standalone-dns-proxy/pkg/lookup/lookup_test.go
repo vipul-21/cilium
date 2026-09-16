@@ -21,20 +21,16 @@ import (
 	"github.com/cilium/cilium/standalone-dns-proxy/pkg/client"
 )
 
-func newIPTable(db *statedb.DB) statedb.RWTable[client.IPtoEndpointInfo] {
-	table, err := statedb.NewTable(
-		db,
-		client.IPtoEndpointTableName,
-		client.IdIPToEndpointIndex,
-	)
+func newIPTable(db *statedb.DB) (statedb.RWTable[client.IPtoEndpointInfo], error) {
+	table, err := client.NewIPtoEndpointTable(db)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	// Pre-insert an entry for testing
 	insertIP(db, table, netip.MustParseAddr("10.0.0.1"), 123, identity.NumericIdentity(5))
 	insertIP(db, table, netip.MustParseAddr("10.0.0.0"), 456, identity.NumericIdentity(5))
-	return table
+	return table, nil
 }
 
 func newPrefixToIdentityTable(db *statedb.DB) statedb.RWTable[client.PrefixToIdentity] {
@@ -103,6 +99,54 @@ func TestLookupRegisteredEndpoint(t *testing.T) {
 	require.False(t, isHost)
 
 	h.Stop(hivetest.Logger(t), context.TODO())
+}
+
+func TestLookupDualStackEndpoints(t *testing.T) {
+	db := statedb.New()
+	table, err := client.NewIPtoEndpointTable(db)
+	require.NoError(t, err)
+
+	endpoints := []client.IPtoEndpointInfo{
+		{
+			IP:       []netip.Addr{netip.MustParseAddr("10.0.0.1"), netip.MustParseAddr("fd00::1")},
+			ID:       123,
+			Identity: identity.NumericIdentity(5),
+		},
+		{
+			IP:       []netip.Addr{netip.MustParseAddr("10.0.0.2"), netip.MustParseAddr("fd00::2")},
+			ID:       456,
+			Identity: identity.NumericIdentity(5),
+		},
+	}
+	wtxn := db.WriteTxn(table)
+	defer wtxn.Abort()
+	for _, ep := range endpoints {
+		_, _, err := table.Insert(wtxn, ep)
+		require.NoError(t, err)
+	}
+	wtxn.Commit()
+	require.Equal(t, len(endpoints), table.NumObjects(db.ReadTxn()))
+
+	rc := &rulesClient{
+		db:                db,
+		ipToIdentityTable: table,
+	}
+	for _, expected := range endpoints {
+		for _, ip := range expected.IP {
+			t.Run(ip.String(), func(t *testing.T) {
+				ep, isHost, err := rc.LookupRegisteredEndpoint(ip)
+				require.NoError(t, err)
+				require.NotNil(t, ep)
+				require.Equal(t, uint16(expected.ID), ep.ID)
+				require.Equal(t, expected.Identity, ep.SecurityIdentity.ID)
+				require.False(t, isHost)
+
+				ident, exists := rc.LookupSecIDByIP(ip)
+				require.True(t, exists)
+				require.Equal(t, expected.Identity, ident.ID)
+			})
+		}
+	}
 }
 
 func TestLookupSecIDByIP(t *testing.T) {

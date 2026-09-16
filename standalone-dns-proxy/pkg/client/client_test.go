@@ -463,23 +463,27 @@ func TestUpdateDNSRules(t *testing.T) {
 	}
 }
 
-func updateMapping(t *testing.T, client *GRPCClient, id uint64, ident identity.NumericIdentity, ip string) {
+func updateMapping(t *testing.T, client *GRPCClient, id uint64, ident identity.NumericIdentity, ips ...string) {
 	t.Helper()
-	ipAddr, err := netip.ParseAddr(ip)
-	require.NoError(t, err)
+	ipBytes := make([][]byte, 0, len(ips))
+	for _, ip := range ips {
+		ipAddr, err := netip.ParseAddr(ip)
+		require.NoError(t, err)
+		ipBytes = append(ipBytes, ipAddr.AsSlice())
+	}
 	input := []*pb.IdentityToEndpointMapping{
 		{
 			Identity: ident.Uint32(),
 			EndpointInfo: []*pb.EndpointInfo{
 				{
 					Id: id,
-					Ip: [][]byte{ipAddr.AsSlice()},
+					Ip: ipBytes,
 				},
 			},
 		},
 	}
 
-	err = client.updateIPToEndpoint(input)
+	err := client.updateIPToEndpoint(input)
 	require.NoError(t, err)
 }
 
@@ -491,7 +495,7 @@ func checkMapping(t *testing.T, client *GRPCClient, ip string, expectedID uint64
 	mapping, _, found := client.ipToEndpointTable.Get(rtxn, IdIPToEndpointIndex.Query(addr))
 	if shouldExist {
 		require.True(t, found)
-		require.Equal(t, []netip.Addr{addr}, mapping.IP)
+		require.Contains(t, mapping.IP, addr)
 		require.Equal(t, expectedIdent, mapping.Identity)
 		require.Equal(t, expectedID, mapping.ID)
 	} else {
@@ -519,13 +523,15 @@ func TestNewIPtoIdentityTable(t *testing.T) {
 	checkMapping(t, client, "192.168.1.1", 100, identity.NumericIdentity(1), false)
 	checkMapping(t, client, "192.168.1.2", 200, identity.NumericIdentity(2), false)
 
-	// Expected: 1 entry for 192.168.1.1, identity 1, ID 100
-	updateMapping(t, client, 100, identity.NumericIdentity(1), "192.168.1.1")
+	// Expected: both IPs map to endpoint 100 with identity 1.
+	updateMapping(t, client, 100, identity.NumericIdentity(1), "192.168.1.1", "fd00::1")
 	checkMapping(t, client, "192.168.1.1", 100, identity.NumericIdentity(1), true)
+	checkMapping(t, client, "fd00::1", 100, identity.NumericIdentity(1), true)
 	checkMapping(t, client, "192.168.1.2", 200, identity.NumericIdentity(2), false)
 
 	updateMapping(t, client, 100, identity.NumericIdentity(1), "192.168.1.1")
 	checkMapping(t, client, "192.168.1.1", 100, identity.NumericIdentity(1), true)
+	checkMapping(t, client, "fd00::1", 100, identity.NumericIdentity(1), false)
 	checkMapping(t, client, "192.168.1.2", 200, identity.NumericIdentity(2), false)
 
 	// Expected: 1 entry for 192.168.1.2, identity 2, ID 200

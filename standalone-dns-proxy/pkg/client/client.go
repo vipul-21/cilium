@@ -86,6 +86,18 @@ var (
 		FromString: index.Uint64String,
 		Unique:     true,
 	}
+	// An endpoint can have multiple IPs, so its ID is the primary key.
+	EndpointIDIndex = statedb.Index[IPtoEndpointInfo, uint64]{
+		Name: "id",
+		FromObject: func(e IPtoEndpointInfo) index.KeySet {
+			return index.NewKeySet(index.Uint64(e.ID))
+		},
+		FromKey: func(key uint64) index.Key {
+			return index.Uint64(key)
+		},
+		FromString: index.Uint64String,
+		Unique:     true,
+	}
 	IdIPToEndpointIndex = statedb.Index[IPtoEndpointInfo, netip.Addr]{
 		Name: "ip",
 		FromObject: func(e IPtoEndpointInfo) index.KeySet {
@@ -404,6 +416,7 @@ func NewIPtoEndpointTable(db *statedb.DB) (statedb.RWTable[IPtoEndpointInfo], er
 	return statedb.NewTable(
 		db,
 		IPtoEndpointTableName,
+		EndpointIDIndex,
 		IdIPToEndpointIndex,
 	)
 }
