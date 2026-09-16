@@ -73,6 +73,8 @@ spec:
             readOnly: true
           - mountPath: /var/run/standalone-dns-proxy
             name: runtime-dir
+          - mountPath: /var/run/cilium/standalone-dns-proxy/sockets
+            name: cilium-sdp-sockets
           securityContext:
             capabilities:
               add: ["NET_ADMIN", "NET_RAW"]
@@ -84,4 +86,11 @@ spec:
         name: standalone-dns-proxy-config-path
       - emptyDir: {}
         name: runtime-dir
+      # Socket used to reach the Cilium agent's FQDNData gRPC service. The agent
+      # restricts it to mode 0660, group --proxy-gid, so that it is not reachable
+      # by workloads that merely share the node's network namespace.
+      - name: cilium-sdp-sockets
+        hostPath:
+          path: "{{ .Values.daemon.runPath }}/standalone-dns-proxy/sockets"
+          type: DirectoryOrCreate
 {{- end }}

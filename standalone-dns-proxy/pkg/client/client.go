@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/cilium/cilium/pkg/fqdn/restore"
+	"github.com/cilium/cilium/pkg/fqdn/service"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -33,6 +34,7 @@ import (
 	"github.com/cilium/cilium/pkg/policy/types"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/u8proto"
+	"github.com/cilium/cilium/standalone-dns-proxy/pkg/defaults"
 	sdpmetrics "github.com/cilium/cilium/standalone-dns-proxy/pkg/metrics"
 
 	pb "github.com/cilium/cilium/api/v1/standalone-dns-proxy"
@@ -223,8 +225,7 @@ type GRPCClient struct {
 	ipToEndpointTable     statedb.RWTable[IPtoEndpointInfo]
 	prefixToIdentityTable statedb.RWTable[PrefixToIdentity]
 
-	// port is the port on which the Cilium agent is listening for gRPC connections
-	port    uint16
+	// address is the Unix domain socket of the Cilium agent's FQDNData gRPC service
 	address string
 
 	// dialClient is used to create gRPC client connections
@@ -244,9 +245,8 @@ type GRPCClient struct {
 func createGRPCClient(params clientParams) *GRPCClient {
 	return &GRPCClient{
 		logger:                params.Logger,
-		port:                  uint16(params.FQDNConfig.StandaloneDNSProxyServerPort),
 		dialClient:            params.DialClient,
-		address:               fmt.Sprintf("localhost:%d", uint16(params.FQDNConfig.StandaloneDNSProxyServerPort)),
+		address:               "unix://" + service.GetSocketPath(service.GetSocketDir(defaults.CiliumRuntimePath)),
 		db:                    params.DB,
 		dnsRulesTable:         params.DNSRulesTable,
 		ipToEndpointTable:     params.IPtoEndpointTable,
@@ -257,6 +257,9 @@ func createGRPCClient(params clientParams) *GRPCClient {
 
 // InitClient creates a new gRPC client
 func (c *GRPCClient) InitClient() error {
+	// The channel is a Unix domain socket whose access is restricted by filesystem
+	// permissions (mode 0660, group --proxy-gid), so no transport-level credentials
+	// are used. See the agent side in pkg/fqdn/service.
 	conn, err := c.dialClient.CreateClient(
 		c.address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
