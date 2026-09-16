@@ -13,6 +13,8 @@
     - [FQDNMapping](#standalonednsproxy-FQDNMapping)
     - [IdentityToEndpointMapping](#standalonednsproxy-IdentityToEndpointMapping)
     - [IdentityToPrefixMapping](#standalonednsproxy-IdentityToPrefixMapping)
+    - [LookupEndpointRequest](#standalonednsproxy-LookupEndpointRequest)
+    - [LookupEndpointResponse](#standalonednsproxy-LookupEndpointResponse)
     - [MetricsData](#standalonednsproxy-MetricsData)
     - [PolicyState](#standalonednsproxy-PolicyState)
     - [PolicyStateResponse](#standalonednsproxy-PolicyStateResponse)
@@ -151,6 +153,37 @@ Cilium Identity ID to IP prefix mapping
 | ----- | ---- | ----- | ----------- |
 | identity | [uint32](#uint32) |  |  |
 | prefix | [bytes](#bytes) | repeated |  |
+
+
+
+
+
+
+<a name="standalonednsproxy-LookupEndpointRequest"></a>
+
+### LookupEndpointRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| ip | [bytes](#bytes) |  | IPv4 or IPv6 address of the local endpoint. |
+
+
+
+
+
+
+<a name="standalonednsproxy-LookupEndpointResponse"></a>
+
+### LookupEndpointResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| endpoint_id | [uint64](#uint64) |  | Local endpoint ID associated with the requested IP. |
+| identity | [uint32](#uint32) |  | Security identity of the endpoint. |
 
 
 
@@ -309,6 +342,7 @@ CFP: https://github.com/cilium/design-cfps/pull/54
 | ----------- | ------------ | ------------- | ------------|
 | StreamPolicyState | [PolicyStateResponse](#standalonednsproxy-PolicyStateResponse) stream | [PolicyState](#standalonednsproxy-PolicyState) stream | StreamPolicyState is used by the Standalone DNS proxy to get the current policy state. Policy state includes the DNS policies and the identity to IP mapping. Cilium agent will stream DNS policies state to Standalone DNS proxy. In case of any client side error, cilium agent will cancel the stream and SDP will have to re-subscribe. In case of any server side error, cilium agent will send an error response and SDP will have to re-subscribe. |
 | UpdateMappingRequest | [FQDNMapping](#standalonednsproxy-FQDNMapping) | [UpdateMappingResponse](#standalonednsproxy-UpdateMappingResponse) | UpdateMappingRequest is used by the Standalone DNS proxy to update ciliium agent with FQDN-IP mappings which in turn update L3/L4 policy maps. In case of any error, SDP will either retry the connection if the error is server side or will error out. Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same behavior as the inbuilt dns proxy in cilium. |
+| LookupEndpoint | [LookupEndpointRequest](#standalonednsproxy-LookupEndpointRequest) | [LookupEndpointResponse](#standalonednsproxy-LookupEndpointResponse) | LookupEndpoint resolves a local endpoint when its IP is missing from the Standalone DNS proxy&#39;s cache. The proxy caches the result until the next policy snapshot replaces the IP to endpoint mapping. |
 
  
 

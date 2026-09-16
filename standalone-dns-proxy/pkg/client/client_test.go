@@ -51,6 +51,8 @@ func (b *mockDefaultDialer) CreateClient(target string, opts ...grpc.DialOption)
 }
 
 type mockFqdnDataServer struct {
+	pb.UnimplementedFQDNDataServer
+
 	success atomic.Int32
 	failure atomic.Int32
 }

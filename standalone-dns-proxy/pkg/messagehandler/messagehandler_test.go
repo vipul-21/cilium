@@ -17,11 +17,13 @@ import (
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/standalone-dns-proxy/pkg/client"
 
 	pb "github.com/cilium/cilium/api/v1/standalone-dns-proxy"
 )
 
 type mockConnHandler struct {
+	client.ConnectionHandler
 	last *pb.FQDNMapping
 }
 

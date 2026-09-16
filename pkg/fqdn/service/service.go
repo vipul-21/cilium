@@ -19,7 +19,9 @@ import (
 	"github.com/cilium/statedb/part"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 
 	"github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/counter"
@@ -217,6 +219,37 @@ var closedWatchChannel = func() <-chan struct{} {
 	close(ch)
 	return ch
 }()
+
+// LookupEndpoint resolves the endpoint directly, without waiting for the next
+// policy snapshot to replicate its IP to the standalone DNS proxy.
+func (s *FQDNDataServer) LookupEndpoint(ctx context.Context, req *pb.LookupEndpointRequest) (*pb.LookupEndpointResponse, error) {
+	ip, ok := netip.AddrFromSlice(req.GetIp())
+	if !ok {
+		return nil, status.Error(codes.InvalidArgument, "invalid endpoint IP address")
+	}
+	ip = ip.Unmap()
+
+	ep := s.endpointsLookup.LookupIP(ip)
+	if ep == nil {
+		return nil, status.Errorf(codes.NotFound, "cannot find endpoint with IP %s", ip)
+	}
+	if ep.IsHost() {
+		return nil, status.Error(codes.FailedPrecondition, "standalone DNS proxy does not support host endpoints")
+	}
+
+	secID, err := ep.GetSecurityIdentity()
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "endpoint with IP %s is unavailable: %v", ip, err)
+	}
+	if secID == nil || secID.ID == identity.InvalidIdentity {
+		return nil, status.Errorf(codes.FailedPrecondition, "endpoint with IP %s has no security identity", ip)
+	}
+
+	return &pb.LookupEndpointResponse{
+		EndpointId: ep.GetID(),
+		Identity:   secID.ID.Uint32(),
+	}, nil
+}
 
 // StreamPolicyState is a bidirectional streaming RPC to subscribe to DNS policies
 // SDP calls this method to subscribe to DNS policies

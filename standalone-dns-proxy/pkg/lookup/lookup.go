@@ -27,6 +27,7 @@ type rulesClient struct {
 	prefixToIdentityTable statedb.RWTable[client.PrefixToIdentity]
 	ipToIdentityTable     statedb.RWTable[client.IPtoEndpointInfo]
 	db                    *statedb.DB
+	connHandler           client.ConnectionHandler
 	// prefixLengths tracks the unique set of prefix lengths for IPv4 and
 	// IPv6 addresses in order to optimize longest prefix match lookups.
 	prefixLengths *counter.PrefixLengthCounter
@@ -40,9 +41,16 @@ func (r *rulesClient) LookupByIdentity(nid identity.NumericIdentity) []string {
 
 // Note: isHost is always false because the standalone DNS proxy does not handle host endpoints yet.
 func (r *rulesClient) LookupRegisteredEndpoint(endpointAddr netip.Addr) (endpt *endpoint.Endpoint, isHost bool, err error) {
+	if !endpointAddr.IsValid() {
+		return nil, false, fmt.Errorf("invalid endpoint IP address: %s", endpointAddr)
+	}
+	endpointAddr = endpointAddr.Unmap()
 	info, _, found := r.ipToIdentityTable.Get(r.db.ReadTxn(), client.IdIPToEndpointIndex.Query(endpointAddr))
 	if !found {
-		return nil, false, fmt.Errorf("cannot find endpoint with IP %s", endpointAddr)
+		info, err = r.connHandler.LookupEndpoint(context.Background(), endpointAddr)
+		if err != nil {
+			return nil, false, fmt.Errorf("cannot find endpoint with IP %s: %w", endpointAddr, err)
+		}
 	}
 	return &endpoint.Endpoint{
 		ID: uint16(info.ID),

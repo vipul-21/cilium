@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"math"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -42,6 +43,9 @@ const (
 	DNSRulesTableName         = "sdp-dns-rules"
 	IPtoEndpointTableName     = "sdp-ip-to-endpoint"
 	PrefixToIdentityTableName = "sdp-prefix-to-identity"
+
+	// Bound the extra latency of a DNS request whose endpoint is not cached.
+	endpointLookupTimeout = time.Second
 )
 
 func DNSRulesCompositeKey(epID uint32, pp restore.PortProto) uint64 {
@@ -208,6 +212,9 @@ type ConnectionHandler interface {
 	// It is responsible for sending the DNS message to the Cilium agent for further processing.
 	NotifyOnMsg(msg *pb.FQDNMapping) error
 
+	// LookupEndpoint resolves and caches an IP to endpoint mapping on a cache miss.
+	LookupEndpoint(ctx context.Context, ip netip.Addr) (IPtoEndpointInfo, error)
+
 	// IsConnected returns the current connection status
 	// connected is a cheap, in-memory flag that indicates whether the client has installed a gRPC connection.
 	// DNS proxy can read this deterministically without causing network probes or races with gRPC internals.
@@ -222,6 +229,10 @@ type GRPCClient struct {
 	dnsRulesTable         statedb.RWTable[DNSRules]
 	ipToEndpointTable     statedb.RWTable[IPtoEndpointInfo]
 	prefixToIdentityTable statedb.RWTable[PrefixToIdentity]
+
+	// Incremented under the table's write transaction for every full snapshot,
+	// including empty snapshots, to fence off in-flight lookup responses.
+	ipToEndpointGeneration atomic.Uint64
 
 	// port is the port on which the Cilium agent is listening for gRPC connections
 	port    uint16
@@ -354,6 +365,58 @@ func (c *GRPCClient) NotifyOnMsg(msg *pb.FQDNMapping) error {
 		c.metrics.FQDNMappingSync.WithLabelValues(sdpmetrics.LabelErrorMappingSyncRequest).Inc()
 	}
 	return err
+}
+
+// LookupEndpoint fills a missing IP to endpoint mapping from the agent.
+func (c *GRPCClient) LookupEndpoint(ctx context.Context, ip netip.Addr) (IPtoEndpointInfo, error) {
+	if !ip.IsValid() {
+		return IPtoEndpointInfo{}, fmt.Errorf("invalid endpoint IP address: %s", ip)
+	}
+	ip = ip.Unmap()
+
+	ctx, cancel := context.WithTimeout(ctx, endpointLookupTimeout)
+	defer cancel()
+
+	fqdnClient := pb.NewFQDNDataClient(c.client)
+	for {
+		generation := c.ipToEndpointGeneration.Load()
+		if info, _, found := c.ipToEndpointTable.Get(c.db.ReadTxn(), IdIPToEndpointIndex.Query(ip)); found {
+			return info, nil
+		}
+
+		response, err := fqdnClient.LookupEndpoint(ctx, &pb.LookupEndpointRequest{Ip: ip.AsSlice()})
+		if err != nil {
+			return IPtoEndpointInfo{}, fmt.Errorf("looking up endpoint with IP %s: %w", ip, err)
+		}
+		if response.GetEndpointId() == 0 || response.GetEndpointId() > math.MaxUint16 ||
+			response.GetIdentity() == identity.InvalidIdentity.Uint32() {
+			return IPtoEndpointInfo{}, fmt.Errorf("invalid endpoint information for IP %s: ID %d, identity %d",
+				ip, response.GetEndpointId(), response.GetIdentity())
+		}
+		info := IPtoEndpointInfo{
+			IP:       []netip.Addr{ip},
+			ID:       response.GetEndpointId(),
+			Identity: identity.NumericIdentity(response.GetIdentity()),
+		}
+
+		wtxn := c.db.WriteTxn(c.ipToEndpointTable)
+		if cached, _, found := c.ipToEndpointTable.Get(wtxn, IdIPToEndpointIndex.Query(ip)); found {
+			wtxn.Abort()
+			return cached, nil
+		}
+		if c.ipToEndpointGeneration.Load() != generation {
+			// A snapshot arrived during the RPC. Resolve again rather than
+			// repopulating an endpoint that the newer snapshot may have removed.
+			wtxn.Abort()
+			continue
+		}
+		if _, _, err := c.ipToEndpointTable.Insert(wtxn, info); err != nil {
+			wtxn.Abort()
+			return IPtoEndpointInfo{}, fmt.Errorf("caching endpoint with IP %s: %w", ip, err)
+		}
+		wtxn.Commit()
+		return info, nil
+	}
 }
 
 func isConnectionError(err error) bool {
@@ -516,7 +579,9 @@ func (c *GRPCClient) updateIPToEndpoint(mappings []*pb.IdentityToEndpointMapping
 	defer wtxn.Abort()
 
 	// Clear existing entries as we are replacing the entire mapping with the given snapshot.
-	c.ipToEndpointTable.DeleteAll(wtxn)
+	if err := c.ipToEndpointTable.DeleteAll(wtxn); err != nil {
+		return fmt.Errorf("clearing IP to endpoint mappings: %w", err)
+	}
 
 	for _, mapping := range mappings {
 		for _, epInfo := range mapping.GetEndpointInfo() {
@@ -538,6 +603,7 @@ func (c *GRPCClient) updateIPToEndpoint(mappings []*pb.IdentityToEndpointMapping
 			}
 		}
 	}
+	c.ipToEndpointGeneration.Add(1)
 	wtxn.Commit()
 
 	return nil

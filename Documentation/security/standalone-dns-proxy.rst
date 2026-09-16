@@ -24,6 +24,13 @@ The Standalone DNS Proxy communicates with the Cilium agent via gRPC to:
 
 1. Receive DNS policy rules from the agent
 2. Report DNS query results for policy enforcement to the agent
+3. Resolve local endpoint information when an IP is missing from its cache
+
+On an endpoint cache miss, the proxy uses the unary ``LookupEndpoint`` RPC to
+retrieve the endpoint ID and security identity from the agent. Successful
+lookups populate the cache, so subsequent requests can use it without an RPC.
+Lookup RPCs have a one-second timeout, and streamed policy snapshots replace
+the cached mappings.
 
 Configuration
 =============
