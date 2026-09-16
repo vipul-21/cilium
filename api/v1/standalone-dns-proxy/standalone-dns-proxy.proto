@@ -23,6 +23,11 @@ service FQDNData {
   // Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same behavior as
   // the inbuilt dns proxy in cilium.
   rpc UpdateMappingRequest(FQDNMapping) returns (UpdateMappingResponse) {}
+
+  // LookupEndpoint resolves a local endpoint when its IP is missing from the
+  // Standalone DNS proxy's cache. The proxy caches the result until the next
+  // policy snapshot replaces the IP to endpoint mapping.
+  rpc LookupEndpoint(LookupEndpointRequest) returns (LookupEndpointResponse) {}
 }
 
 // Response code returned by RPC methods.
@@ -153,4 +158,13 @@ message EndpointInfo {
 message IdentityToPrefixMapping {
     uint32 identity = 1;
     repeated bytes prefix = 2;
+}
+
+message LookupEndpointRequest {
+    bytes ip = 1; // IPv4 or IPv6 address of the local endpoint.
+}
+
+message LookupEndpointResponse {
+    uint64 endpoint_id = 1; // Local endpoint ID associated with the requested IP.
+    uint32 identity = 2; // Security identity of the endpoint.
 }

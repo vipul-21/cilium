@@ -958,6 +958,102 @@ func (x *IdentityToPrefixMapping) GetPrefix() [][]byte {
 	return nil
 }
 
+type LookupEndpointRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ip            []byte                 `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"` // IPv4 or IPv6 address of the local endpoint.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LookupEndpointRequest) Reset() {
+	*x = LookupEndpointRequest{}
+	mi := &file_standalone_dns_proxy_standalone_dns_proxy_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LookupEndpointRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LookupEndpointRequest) ProtoMessage() {}
+
+func (x *LookupEndpointRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_standalone_dns_proxy_standalone_dns_proxy_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LookupEndpointRequest.ProtoReflect.Descriptor instead.
+func (*LookupEndpointRequest) Descriptor() ([]byte, []int) {
+	return file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *LookupEndpointRequest) GetIp() []byte {
+	if x != nil {
+		return x.Ip
+	}
+	return nil
+}
+
+type LookupEndpointResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EndpointId    uint64                 `protobuf:"varint,1,opt,name=endpoint_id,json=endpointId,proto3" json:"endpoint_id,omitempty"` // Local endpoint ID associated with the requested IP.
+	Identity      uint32                 `protobuf:"varint,2,opt,name=identity,proto3" json:"identity,omitempty"`                       // Security identity of the endpoint.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LookupEndpointResponse) Reset() {
+	*x = LookupEndpointResponse{}
+	mi := &file_standalone_dns_proxy_standalone_dns_proxy_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LookupEndpointResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LookupEndpointResponse) ProtoMessage() {}
+
+func (x *LookupEndpointResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_standalone_dns_proxy_standalone_dns_proxy_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LookupEndpointResponse.ProtoReflect.Descriptor instead.
+func (*LookupEndpointResponse) Descriptor() ([]byte, []int) {
+	return file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *LookupEndpointResponse) GetEndpointId() uint64 {
+	if x != nil {
+		return x.EndpointId
+	}
+	return 0
+}
+
+func (x *LookupEndpointResponse) GetIdentity() uint32 {
+	if x != nil {
+		return x.Identity
+	}
+	return 0
+}
+
 var File_standalone_dns_proxy_standalone_dns_proxy_proto protoreflect.FileDescriptor
 
 const file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDesc = "" +
@@ -1026,7 +1122,13 @@ const file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDesc = "" +
 	"\x02ip\x18\x02 \x03(\fR\x02ip\"M\n" +
 	"\x17IdentityToPrefixMapping\x12\x1a\n" +
 	"\bidentity\x18\x01 \x01(\rR\bidentity\x12\x16\n" +
-	"\x06prefix\x18\x02 \x03(\fR\x06prefix*\x9f\x02\n" +
+	"\x06prefix\x18\x02 \x03(\fR\x06prefix\"'\n" +
+	"\x15LookupEndpointRequest\x12\x0e\n" +
+	"\x02ip\x18\x01 \x01(\fR\x02ip\"U\n" +
+	"\x16LookupEndpointResponse\x12\x1f\n" +
+	"\vendpoint_id\x18\x01 \x01(\x04R\n" +
+	"endpointId\x12\x1a\n" +
+	"\bidentity\x18\x02 \x01(\rR\bidentity*\x9f\x02\n" +
 	"\fResponseCode\x12\x1d\n" +
 	"\x19RESPONSE_CODE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16RESPONSE_CODE_NO_ERROR\x10\x01\x12\x1e\n" +
@@ -1041,10 +1143,11 @@ const file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDesc = "" +
 	"\x16PROXY_ERROR_TYPE_PROXY\x10\x01\x12\x1c\n" +
 	"\x18PROXY_ERROR_TYPE_TIMEOUT\x10\x02\x12%\n" +
 	"!PROXY_ERROR_TYPE_SEMAPHORE_FAILED\x10\x03\x12(\n" +
-	"$PROXY_ERROR_TYPE_SEMAPHORE_TIMED_OUT\x10\x042\xd5\x01\n" +
+	"$PROXY_ERROR_TYPE_SEMAPHORE_TIMED_OUT\x10\x042\xc0\x02\n" +
 	"\bFQDNData\x12c\n" +
 	"\x11StreamPolicyState\x12'.standalonednsproxy.PolicyStateResponse\x1a\x1f.standalonednsproxy.PolicyState\"\x00(\x010\x01\x12d\n" +
-	"\x14UpdateMappingRequest\x12\x1f.standalonednsproxy.FQDNMapping\x1a).standalonednsproxy.UpdateMappingResponse\"\x00B4Z2github.com/cilium/cilium/api/v1/standalonednsproxyb\x06proto3"
+	"\x14UpdateMappingRequest\x12\x1f.standalonednsproxy.FQDNMapping\x1a).standalonednsproxy.UpdateMappingResponse\"\x00\x12i\n" +
+	"\x0eLookupEndpoint\x12).standalonednsproxy.LookupEndpointRequest\x1a*.standalonednsproxy.LookupEndpointResponse\"\x00B4Z2github.com/cilium/cilium/api/v1/standalonednsproxyb\x06proto3"
 
 var (
 	file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDescOnce sync.Once
@@ -1059,7 +1162,7 @@ func file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDescGZIP() []byte {
 }
 
 var file_standalone_dns_proxy_standalone_dns_proxy_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_standalone_dns_proxy_standalone_dns_proxy_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_standalone_dns_proxy_standalone_dns_proxy_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_standalone_dns_proxy_standalone_dns_proxy_proto_goTypes = []any{
 	(ResponseCode)(0),                 // 0: standalonednsproxy.ResponseCode
 	(ProxyErrorType)(0),               // 1: standalonednsproxy.ProxyErrorType
@@ -1075,6 +1178,8 @@ var file_standalone_dns_proxy_standalone_dns_proxy_proto_goTypes = []any{
 	(*IdentityToEndpointMapping)(nil), // 11: standalonednsproxy.IdentityToEndpointMapping
 	(*EndpointInfo)(nil),              // 12: standalonednsproxy.EndpointInfo
 	(*IdentityToPrefixMapping)(nil),   // 13: standalonednsproxy.IdentityToPrefixMapping
+	(*LookupEndpointRequest)(nil),     // 14: standalonednsproxy.LookupEndpointRequest
+	(*LookupEndpointResponse)(nil),    // 15: standalonednsproxy.LookupEndpointResponse
 }
 var file_standalone_dns_proxy_standalone_dns_proxy_proto_depIdxs = []int32{
 	0,  // 0: standalonednsproxy.PolicyStateResponse.response:type_name -> standalonednsproxy.ResponseCode
@@ -1090,10 +1195,12 @@ var file_standalone_dns_proxy_standalone_dns_proxy_proto_depIdxs = []int32{
 	12, // 10: standalonednsproxy.IdentityToEndpointMapping.endpoint_info:type_name -> standalonednsproxy.EndpointInfo
 	2,  // 11: standalonednsproxy.FQDNData.StreamPolicyState:input_type -> standalonednsproxy.PolicyStateResponse
 	3,  // 12: standalonednsproxy.FQDNData.UpdateMappingRequest:input_type -> standalonednsproxy.FQDNMapping
-	10, // 13: standalonednsproxy.FQDNData.StreamPolicyState:output_type -> standalonednsproxy.PolicyState
-	7,  // 14: standalonednsproxy.FQDNData.UpdateMappingRequest:output_type -> standalonednsproxy.UpdateMappingResponse
-	13, // [13:15] is the sub-list for method output_type
-	11, // [11:13] is the sub-list for method input_type
+	14, // 13: standalonednsproxy.FQDNData.LookupEndpoint:input_type -> standalonednsproxy.LookupEndpointRequest
+	10, // 14: standalonednsproxy.FQDNData.StreamPolicyState:output_type -> standalonednsproxy.PolicyState
+	7,  // 15: standalonednsproxy.FQDNData.UpdateMappingRequest:output_type -> standalonednsproxy.UpdateMappingResponse
+	15, // 16: standalonednsproxy.FQDNData.LookupEndpoint:output_type -> standalonednsproxy.LookupEndpointResponse
+	14, // [14:17] is the sub-list for method output_type
+	11, // [11:14] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -1110,7 +1217,7 @@ func file_standalone_dns_proxy_standalone_dns_proxy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDesc), len(file_standalone_dns_proxy_standalone_dns_proxy_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

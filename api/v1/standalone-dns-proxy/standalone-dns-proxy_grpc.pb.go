@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	FQDNData_StreamPolicyState_FullMethodName    = "/standalonednsproxy.FQDNData/StreamPolicyState"
 	FQDNData_UpdateMappingRequest_FullMethodName = "/standalonednsproxy.FQDNData/UpdateMappingRequest"
+	FQDNData_LookupEndpoint_FullMethodName       = "/standalonednsproxy.FQDNData/LookupEndpoint"
 )
 
 // FQDNDataClient is the client API for FQDNData service.
@@ -45,6 +46,10 @@ type FQDNDataClient interface {
 	// Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same behavior as
 	// the inbuilt dns proxy in cilium.
 	UpdateMappingRequest(ctx context.Context, in *FQDNMapping, opts ...grpc.CallOption) (*UpdateMappingResponse, error)
+	// LookupEndpoint resolves a local endpoint when its IP is missing from the
+	// Standalone DNS proxy's cache. The proxy caches the result until the next
+	// policy snapshot replaces the IP to endpoint mapping.
+	LookupEndpoint(ctx context.Context, in *LookupEndpointRequest, opts ...grpc.CallOption) (*LookupEndpointResponse, error)
 }
 
 type fQDNDataClient struct {
@@ -78,6 +83,16 @@ func (c *fQDNDataClient) UpdateMappingRequest(ctx context.Context, in *FQDNMappi
 	return out, nil
 }
 
+func (c *fQDNDataClient) LookupEndpoint(ctx context.Context, in *LookupEndpointRequest, opts ...grpc.CallOption) (*LookupEndpointResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LookupEndpointResponse)
+	err := c.cc.Invoke(ctx, FQDNData_LookupEndpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FQDNDataServer is the server API for FQDNData service.
 // All implementations should embed UnimplementedFQDNDataServer
 // for forward compatibility.
@@ -97,6 +112,10 @@ type FQDNDataServer interface {
 	// Note: In case of concurrent updates, since this is called in a callback(notifyDNSMsg) from the DNS server it follows the same behavior as
 	// the inbuilt dns proxy in cilium.
 	UpdateMappingRequest(context.Context, *FQDNMapping) (*UpdateMappingResponse, error)
+	// LookupEndpoint resolves a local endpoint when its IP is missing from the
+	// Standalone DNS proxy's cache. The proxy caches the result until the next
+	// policy snapshot replaces the IP to endpoint mapping.
+	LookupEndpoint(context.Context, *LookupEndpointRequest) (*LookupEndpointResponse, error)
 }
 
 // UnimplementedFQDNDataServer should be embedded to have
@@ -111,6 +130,9 @@ func (UnimplementedFQDNDataServer) StreamPolicyState(grpc.BidiStreamingServer[Po
 }
 func (UnimplementedFQDNDataServer) UpdateMappingRequest(context.Context, *FQDNMapping) (*UpdateMappingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateMappingRequest not implemented")
+}
+func (UnimplementedFQDNDataServer) LookupEndpoint(context.Context, *LookupEndpointRequest) (*LookupEndpointResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LookupEndpoint not implemented")
 }
 func (UnimplementedFQDNDataServer) testEmbeddedByValue() {}
 
@@ -157,6 +179,24 @@ func _FQDNData_UpdateMappingRequest_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FQDNData_LookupEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LookupEndpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FQDNDataServer).LookupEndpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FQDNData_LookupEndpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FQDNDataServer).LookupEndpoint(ctx, req.(*LookupEndpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FQDNData_ServiceDesc is the grpc.ServiceDesc for FQDNData service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -167,6 +207,10 @@ var FQDNData_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateMappingRequest",
 			Handler:    _FQDNData_UpdateMappingRequest_Handler,
+		},
+		{
+			MethodName: "LookupEndpoint",
+			Handler:    _FQDNData_LookupEndpoint_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -35,6 +35,7 @@ type clientParams struct {
 	PrefixToIdentity statedb.RWTable[client.PrefixToIdentity]
 	DB               *statedb.DB
 	JobGroup         job.Group
+	ConnHandler      client.ConnectionHandler
 }
 
 func newRulesClient(params clientParams) lookup.ProxyLookupHandler {
@@ -44,6 +45,7 @@ func newRulesClient(params clientParams) lookup.ProxyLookupHandler {
 		prefixToIdentityTable: params.PrefixToIdentity,
 		db:                    params.DB,
 		prefixLengths:         counter.DefaultPrefixLengthCounter(),
+		connHandler:           params.ConnHandler,
 	}
 
 	params.JobGroup.Add(job.OneShot("sdp-watch-prefix-to-identity-mapping", r.watchPrefixToIdentityTable,

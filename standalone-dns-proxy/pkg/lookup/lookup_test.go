@@ -12,6 +12,8 @@ import (
 	"github.com/cilium/hive/hivetest"
 	"github.com/cilium/statedb"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/cilium/cilium/pkg/fqdn/lookup"
 	"github.com/cilium/cilium/pkg/hive"
@@ -20,6 +22,23 @@ import (
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/standalone-dns-proxy/pkg/client"
 )
+
+type mockEndpointLookup struct {
+	client.ConnectionHandler
+	lookup func(context.Context, netip.Addr) (client.IPtoEndpointInfo, error)
+}
+
+func (m *mockEndpointLookup) LookupEndpoint(ctx context.Context, ip netip.Addr) (client.IPtoEndpointInfo, error) {
+	return m.lookup(ctx, ip)
+}
+
+func newMockConnectionHandler() client.ConnectionHandler {
+	return &mockEndpointLookup{
+		lookup: func(context.Context, netip.Addr) (client.IPtoEndpointInfo, error) {
+			return client.IPtoEndpointInfo{}, status.Error(codes.NotFound, "endpoint not found")
+		},
+	}
+}
 
 func newIPTable(db *statedb.DB) statedb.RWTable[client.IPtoEndpointInfo] {
 	table, err := statedb.NewTable(
@@ -82,6 +101,7 @@ func TestLookupRegisteredEndpoint(t *testing.T) {
 		cell.Provide(newIPTable),
 		cell.Provide(newRulesClient),
 		cell.Provide(newPrefixToIdentityTable),
+		cell.Provide(newMockConnectionHandler),
 		cell.Invoke(func(_lh lookup.ProxyLookupHandler) {
 			rc = _lh
 		}),
@@ -105,12 +125,75 @@ func TestLookupRegisteredEndpoint(t *testing.T) {
 	h.Stop(hivetest.Logger(t), context.TODO())
 }
 
+func TestLookupRegisteredEndpointFallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		ip        netip.Addr
+		rpcError  error
+		wantErr   bool
+		wantCalls int
+		wantID    uint16
+	}{
+		{name: "cache hit", ip: netip.MustParseAddr("10.0.0.1"), wantID: 123},
+		{name: "mapped cache hit", ip: netip.MustParseAddr("::ffff:10.0.0.1"), wantID: 123},
+		{name: "IPv4 miss", ip: netip.MustParseAddr("10.0.0.2"), wantCalls: 1, wantID: 789},
+		{name: "IPv6 miss", ip: netip.MustParseAddr("fd00::1"), wantCalls: 1, wantID: 789},
+		{name: "agent error", ip: netip.MustParseAddr("10.0.0.2"), rpcError: status.Error(codes.Unavailable, "agent unavailable"), wantCalls: 1, wantErr: true},
+		{name: "invalid IP", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := statedb.New()
+			table := newIPTable(db)
+			require.NotNil(t, table)
+			calls := 0
+			r := &rulesClient{
+				db: db, ipToIdentityTable: table,
+				connHandler: &mockEndpointLookup{
+					lookup: func(_ context.Context, ip netip.Addr) (client.IPtoEndpointInfo, error) {
+						calls++
+						require.Equal(t, tt.ip.Unmap(), ip)
+						return client.IPtoEndpointInfo{IP: []netip.Addr{ip}, ID: 789, Identity: 5}, tt.rpcError
+					},
+				},
+			}
+			ep, isHost, err := r.LookupRegisteredEndpoint(tt.ip)
+			require.Equal(t, tt.wantCalls, calls)
+			require.False(t, isHost)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Nil(t, ep)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantID, ep.ID)
+			require.Equal(t, identity.NumericIdentity(5), ep.SecurityIdentity.ID)
+		})
+	}
+}
+
+func BenchmarkLookupRegisteredEndpointCacheHit(b *testing.B) {
+	db := statedb.New()
+	table := newIPTable(db)
+	require.NotNil(b, table)
+	r := &rulesClient{db: db, ipToIdentityTable: table}
+	ip := netip.MustParseAddr("10.0.0.1")
+	b.ReportAllocs()
+	for b.Loop() {
+		ep, _, err := r.LookupRegisteredEndpoint(ip)
+		if err != nil || ep.ID != 123 {
+			b.Fatalf("unexpected cached endpoint: %v, %v", ep, err)
+		}
+	}
+}
+
 func TestLookupSecIDByIP(t *testing.T) {
 	var rc lookup.ProxyLookupHandler
 	h := hive.New(
 		cell.Provide(newIPTable),
 		cell.Provide(newRulesClient),
 		cell.Provide(newPrefixToIdentityTable),
+		cell.Provide(newMockConnectionHandler),
 		cell.Invoke(func(_lh lookup.ProxyLookupHandler) {
 			rc = _lh
 		}),
