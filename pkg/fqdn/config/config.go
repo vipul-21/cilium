@@ -24,7 +24,15 @@ const (
 	FQDNProxyResponseMaxDelay                = "tofqdns-proxy-response-max-delay"
 	ToFQDNsPreCache                          = "tofqdns-pre-cache"
 	DNSPolicyUnloadOnShutdown                = "dns-policy-unload-on-shutdown"
+	ToFQDNsProxyPort                         = "tofqdns-proxy-port"
+	FQDNRejectResponseCode                   = "tofqdns-dns-reject-response-code"
+	FQDNRegexCompileLRUSize                  = "fqdn-regex-compile-lru-size"
+
+	FQDNProxyDenyWithNameError = "nameError"
+	FQDNProxyDenyWithRefused   = "refused"
 )
+
+var FQDNRejectOptions = []string{FQDNProxyDenyWithNameError, FQDNProxyDenyWithRefused}
 
 type Config struct {
 	EnableStandaloneDNSProxy                 bool
@@ -38,6 +46,9 @@ type Config struct {
 	FQDNProxyResponseMaxDelay                time.Duration `mapstructure:"tofqdns-proxy-response-max-delay"`
 	ToFQDNsPreCache                          string
 	DNSPolicyUnloadOnShutdown                bool
+	ToFQDNsProxyPort                         int
+	FQDNRejectResponse                       string `mapstructure:"tofqdns-dns-reject-response-code"`
+	FQDNRegexCompileLRUSize                  uint
 }
 
 var DefaultConfig = Config{
@@ -50,6 +61,8 @@ var DefaultConfig = Config{
 	DNSProxyLockCount:                        131,
 	DNSProxyLockTimeout:                      500 * time.Millisecond,
 	FQDNProxyResponseMaxDelay:                100 * time.Millisecond,
+	FQDNRejectResponse:                       FQDNProxyDenyWithRefused,
+	FQDNRegexCompileLRUSize:                  1024,
 }
 
 // These legacy flags were not registered by standalone-dns-proxy, so absent
@@ -59,6 +72,8 @@ var DefaultStandaloneConfig = func() Config {
 	cfg.DNSProxyLockCount = 0
 	cfg.DNSProxyLockTimeout = 0
 	cfg.FQDNProxyResponseMaxDelay = 0
+	cfg.FQDNRejectResponse = ""
+	cfg.FQDNRegexCompileLRUSize = 0
 	return cfg
 }()
 
@@ -77,4 +92,8 @@ func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.String(ToFQDNsPreCache, def.ToFQDNsPreCache, "DNS cache data at this path is preloaded on agent startup")
 	flags.MarkDeprecated(ToFQDNsPreCache, "This option is obsolete and will be removed in v1.21")
 	flags.Bool(DNSPolicyUnloadOnShutdown, def.DNSPolicyUnloadOnShutdown, "Unload DNS policy rules on graceful shutdown")
+	flags.Int(ToFQDNsProxyPort, def.ToFQDNsProxyPort, "Global port on which the in-agent DNS proxy should listen. Default 0 is a OS-assigned port.")
+	flags.String(FQDNRejectResponseCode, def.FQDNRejectResponse, fmt.Sprintf("DNS response code for rejecting DNS requests, available options are '%v'", FQDNRejectOptions))
+	flags.Uint(FQDNRegexCompileLRUSize, def.FQDNRegexCompileLRUSize, "Size of the FQDN regex compilation LRU. Useful for heavy but repeated DNS L7 rules with MatchName or MatchPattern")
+	flags.MarkHidden(FQDNRegexCompileLRUSize)
 }

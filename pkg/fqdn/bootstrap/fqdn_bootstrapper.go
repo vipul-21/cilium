@@ -13,6 +13,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointstate"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -24,9 +25,10 @@ import (
 type fqdnProxyBootstrapperParams struct {
 	cell.In
 
-	JobGroup  job.Group
-	Lifecycle cell.Lifecycle
-	Logger    *slog.Logger
+	JobGroup   job.Group
+	Lifecycle  cell.Lifecycle
+	Logger     *slog.Logger
+	FQDNConfig fqdnconfig.Config
 
 	ProxyPorts        *proxyports.ProxyPorts
 	DNSProxy          proxy.DNSProxier
@@ -36,6 +38,7 @@ type fqdnProxyBootstrapperParams struct {
 
 type fqdnProxyBootstrapper struct {
 	logger *slog.Logger
+	config fqdnconfig.Config
 
 	proxy      proxy.DNSProxier
 	proxyPorts *proxyports.ProxyPorts
@@ -48,6 +51,7 @@ type fqdnProxyBootstrapper struct {
 func newFQDNProxyBootstrapper(params fqdnProxyBootstrapperParams) endpointstate.RestorationNotifierOut {
 	b := &fqdnProxyBootstrapper{
 		logger: params.Logger,
+		config: params.FQDNConfig,
 
 		proxy:      params.DNSProxy,
 		proxyPorts: params.ProxyPorts,
@@ -122,7 +126,7 @@ func (b *fqdnProxyBootstrapper) startProxy(ctx context.Context, health cell.Heal
 
 	// A configured proxy wantPort takes precedence over using the previous wantPort.
 	// An existing (restored-from-disk) port is used on a best-effort basis
-	wantPort := uint16(option.Config.ToFQDNsProxyPort)
+	wantPort := uint16(b.config.ToFQDNsProxyPort)
 	if wantPort == 0 {
 		var isStatic bool
 		// Try reuse previous DNS proxy port number

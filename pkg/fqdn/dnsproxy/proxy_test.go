@@ -33,6 +33,7 @@ import (
 	fakeipsec "github.com/cilium/cilium/pkg/datapath/linux/ipsec/fake"
 	"github.com/cilium/cilium/pkg/endpoint"
 	endpointtypes "github.com/cilium/cilium/pkg/endpoint/types"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	fqdndns "github.com/cilium/cilium/pkg/fqdn/dns"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
@@ -43,7 +44,6 @@ import (
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/policy/compute"
@@ -67,7 +67,33 @@ type DNSProxyTestSuite struct {
 	logger       *slog.Logger
 }
 
+func TestRejectReplyConfig(t *testing.T) {
+	for _, tt := range []struct {
+		response string
+		want     int
+	}{
+		{fqdnconfig.FQDNProxyDenyWithNameError, dns.RcodeNameError},
+		{"NAMEERROR", dns.RcodeNameError},
+		{fqdnconfig.FQDNProxyDenyWithRefused, dns.RcodeRefused},
+		{"REFUSED", dns.RcodeRefused},
+		{"", dns.RcodeRefused},
+		{"invalid", dns.RcodeRefused},
+	} {
+		t.Run(tt.response, func(t *testing.T) {
+			proxy := NewDNSProxy(DNSProxyConfig{
+				Logger:      hivetest.Logger(t),
+				RejectReply: tt.response,
+			}, nil, nil)
+			require.Equal(t, tt.want, proxy.rejectReply)
+		})
+	}
+}
+
 func setupDNSProxyTestSuite(tb testing.TB) *DNSProxyTestSuite {
+	return setupDNSProxyTestSuiteWithConfig(tb, fqdnconfig.DefaultConfig)
+}
+
+func setupDNSProxyTestSuiteWithConfig(tb testing.TB, cfg fqdnconfig.Config) *DNSProxyTestSuite {
 	testutils.PrivilegedTest(tb)
 	logger := hivetest.Logger(tb)
 
@@ -98,7 +124,7 @@ func setupDNSProxyTestSuite(tb testing.TB) *DNSProxyTestSuite {
 		MaxRestoreDNSIPs:       1000,
 		ConcurrencyLimit:       0,
 		ConcurrencyGracePeriod: 0,
-		RejectReply:            option.Config.FQDNRejectResponse,
+		RejectReply:            cfg.FQDNRejectResponse,
 	}
 	proxy := NewDNSProxy(dnsProxyConfig,
 		s,
@@ -371,11 +397,9 @@ func (s *DNSProxyTestSuite) requestRejectNonMatchingRefusedResponse(t *testing.T
 
 func TestPrivilegedRejectNonMatchingRefusedResponseWithNameError(t *testing.T) {
 	// reject a query with NXDomain
-	option.Config.FQDNRejectResponse = option.FQDNProxyDenyWithNameError
-	t.Cleanup(func() {
-		option.Config.FQDNRejectResponse = ""
-	})
-	s := setupDNSProxyTestSuite(t)
+	cfg := fqdnconfig.DefaultConfig
+	cfg.FQDNRejectResponse = fqdnconfig.FQDNProxyDenyWithNameError
+	s := setupDNSProxyTestSuiteWithConfig(t, cfg)
 
 	request := s.requestRejectNonMatchingRefusedResponse(t)
 
@@ -386,11 +410,9 @@ func TestPrivilegedRejectNonMatchingRefusedResponseWithNameError(t *testing.T) {
 
 func TestPrivilegedRejectNonMatchingRefusedResponseWithRefused(t *testing.T) {
 	// reject a query with Refused
-	option.Config.FQDNRejectResponse = option.FQDNProxyDenyWithRefused
-	t.Cleanup(func() {
-		option.Config.FQDNRejectResponse = ""
-	})
-	s := setupDNSProxyTestSuite(t)
+	cfg := fqdnconfig.DefaultConfig
+	cfg.FQDNRejectResponse = fqdnconfig.FQDNProxyDenyWithRefused
+	s := setupDNSProxyTestSuiteWithConfig(t, cfg)
 
 	request := s.requestRejectNonMatchingRefusedResponse(t)
 

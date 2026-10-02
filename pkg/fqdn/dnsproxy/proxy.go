@@ -23,6 +23,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/lookup"
 	"github.com/cilium/cilium/pkg/fqdn/matchpattern"
 	"github.com/cilium/cilium/pkg/fqdn/proxy/ipfamily"
@@ -601,13 +602,13 @@ func NewDNSProxy(dnsProxyConfig DNSProxyConfig, proxyLookupHandler lookup.ProxyL
 	}
 
 	switch strings.ToLower(dnsProxyConfig.RejectReply) {
-	case strings.ToLower(option.FQDNProxyDenyWithNameError):
+	case strings.ToLower(fqdnconfig.FQDNProxyDenyWithNameError):
 		p.rejectReply = dns.RcodeNameError
-	case strings.ToLower(option.FQDNProxyDenyWithRefused), "":
+	case strings.ToLower(fqdnconfig.FQDNProxyDenyWithRefused), "":
 		p.rejectReply = dns.RcodeRefused
 	default:
 		p.logger.Info(fmt.Sprintf("DNS reject response '%s' is not valid, available options are '%v'",
-			dnsProxyConfig.RejectReply, option.FQDNRejectOptions))
+			dnsProxyConfig.RejectReply, fqdnconfig.FQDNRejectOptions))
 	}
 
 	return p

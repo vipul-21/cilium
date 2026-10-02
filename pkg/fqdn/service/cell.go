@@ -61,7 +61,7 @@ func newServer(params serverParams) *FQDNDataServer {
 		return nil
 	}
 
-	if params.DaemonConfig.ToFQDNsProxyPort == 0 || params.Config.StandaloneDNSProxyServerPort == 0 {
+	if params.Config.ToFQDNsProxyPort == 0 || params.Config.StandaloneDNSProxyServerPort == 0 {
 		params.Logger.Error("Standalone DNS proxy requires a valid port number to be set")
 		return nil
 	}

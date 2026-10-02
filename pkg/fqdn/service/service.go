@@ -83,7 +83,7 @@ type FQDNDataServer struct {
 	// |----------------------------------------|----------------|------------------------------------------------|
 	// | EnableStandaloneDNSProxy               | true           | Feature flag to enable standalone DNS proxy   |
 	// | DaemonConfig.EnableL7Proxy             | true           | L7 proxy must be enabled as a prerequisite    |
-	// | DaemonConfig.ToFQDNsProxyPort          | > 0            | Valid port for FQDN proxy                     |
+	// | Config.ToFQDNsProxyPort                | > 0            | Valid port for FQDN proxy                     |
 	// | Config.StandaloneDNSProxyServerPort    | > 0            | Valid port for standalone DNS proxy server    |
 	//
 	// If ANY of these conditions is not met, enabled will be false and the standalone

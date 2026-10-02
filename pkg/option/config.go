@@ -357,9 +357,6 @@ const (
 	// ToFQDNsMinTTL is the minimum time, in seconds, to use DNS data for toFQDNs policies.
 	ToFQDNsMinTTL = "tofqdns-min-ttl"
 
-	// ToFQDNsProxyPort is the global port on which the in-agent DNS proxy should listen. Default 0 is a OS-assigned port.
-	ToFQDNsProxyPort = "tofqdns-proxy-port"
-
 	// ToFQDNsMaxIPsPerHost defines the maximum number of IPs to maintain
 	// for each FQDN name in an endpoint's FQDN cache
 	ToFQDNsMaxIPsPerHost = "tofqdns-endpoint-max-ip-per-hostname"
@@ -613,23 +610,6 @@ const (
 	// lest the configuration is considered invalid.
 	// If both burst and rate limit are 0 or not specified, no limit is imposed.
 	BPFEventsDefaultBurstLimit = "bpf-events-default-burst-limit"
-
-	// FQDNRejectResponseCode is the name for the option for dns-proxy reject response code
-	FQDNRejectResponseCode = "tofqdns-dns-reject-response-code"
-
-	// FQDNProxyDenyWithNameError is useful when stub resolvers, like the one
-	// in Alpine Linux's libc (musl), treat a REFUSED as a resolution error.
-	// This happens when trying a DNS search list, as in kubernetes, and breaks
-	// even whitelisted DNS names.
-	FQDNProxyDenyWithNameError = "nameError"
-
-	// FQDNProxyDenyWithRefused is the response code for Domain refused. It is
-	// the default for denied DNS requests.
-	FQDNProxyDenyWithRefused = "refused"
-
-	// FQDNRegexCompileLRUSize is the size of the FQDN regex compilation LRU.
-	// Useful for heavy but repeated FQDN MatchName or MatchPattern use.
-	FQDNRegexCompileLRUSize = "fqdn-regex-compile-lru-size"
 
 	// PreAllocateMapsName is the name of the option PreAllocateMaps
 	PreAllocateMapsName = "preallocate-bpf-maps"
@@ -952,8 +932,6 @@ const (
 
 // Default string arguments
 var (
-	FQDNRejectOptions = []string{FQDNProxyDenyWithNameError, FQDNProxyDenyWithRefused}
-
 	// MonitorAggregationFlagsDefault ensure that all TCP flags trigger
 	// monitor notifications even under medium monitor aggregation.
 	MonitorAggregationFlagsDefault = []string{"syn", "fin", "rst"}
@@ -1428,12 +1406,6 @@ type DaemonConfig struct {
 	TracePayloadlenOverlay int
 	ToFQDNsMinTTL          int
 
-	// ToFQDNsProxyPort is the user-configured global, shared, DNS listen port used
-	// by the DNS Proxy. Both UDP and TCP are handled on the same port. When it
-	// is 0 a random port will be assigned, and can be obtained from
-	// DefaultDNSProxy below.
-	ToFQDNsProxyPort int
-
 	// ToFQDNsMaxIPsPerHost defines the maximum number of IPs to maintain
 	// for each FQDN name in an endpoint's FQDN cache
 	ToFQDNsMaxIPsPerHost int
@@ -1446,13 +1418,6 @@ type DaemonConfig struct {
 	// previously active connections with expired DNS lookups are
 	// still considered alive
 	ToFQDNsIdleConnectionGracePeriod time.Duration
-
-	// FQDNRejectResponse is the dns-proxy response for invalid dns-proxy request
-	FQDNRejectResponse string
-
-	// FQDNRegexCompileLRUSize is the size of the FQDN regex compilation LRU.
-	// Useful for heavy but repeated FQDN MatchName or MatchPattern use.
-	FQDNRegexCompileLRUSize uint
 
 	// DNSProxyConcurrencyLimit limits parallel processing of DNS messages in
 	// DNS proxy at any given point in time.
@@ -2610,7 +2575,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableIdentityMark = vp.GetBool(EnableIdentityMark)
 
 	// toFQDNs options
-	c.FQDNRegexCompileLRUSize = vp.GetUint(FQDNRegexCompileLRUSize)
 	c.ToFQDNsMaxIPsPerHost = vp.GetInt(ToFQDNsMaxIPsPerHost)
 	if maxZombies := vp.GetInt(ToFQDNsMaxDeferredConnectionDeletes); maxZombies >= 0 {
 		c.ToFQDNsMaxDeferredConnectionDeletes = vp.GetInt(ToFQDNsMaxDeferredConnectionDeletes)
@@ -2624,12 +2588,10 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	default:
 		c.ToFQDNsMinTTL = defaults.ToFQDNsMinTTL
 	}
-	c.ToFQDNsProxyPort = vp.GetInt(ToFQDNsProxyPort)
 	c.ToFQDNsIdleConnectionGracePeriod = vp.GetDuration(ToFQDNsIdleConnectionGracePeriod)
 	c.DNSProxyConcurrencyLimit = vp.GetInt(DNSProxyConcurrencyLimit)
 	c.DNSProxyEnableTransparentMode = vp.GetBool(DNSProxyEnableTransparentMode)
 	c.DNSProxySocketLingerTimeout = vp.GetInt(DNSProxySocketLingerTimeout)
-	c.FQDNRejectResponse = vp.GetString(FQDNRejectResponseCode)
 
 	subnets, err := ip.ParsePrefixes(vp.GetStringSlice(IPv4PodSubnets))
 	if err != nil {

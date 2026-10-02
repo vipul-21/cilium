@@ -79,8 +79,7 @@ func setupTestEnv(t *testing.T) *StandaloneDNSProxy {
 			cell.Provide(
 				func() *option.DaemonConfig {
 					return &option.DaemonConfig{
-						EnableL7Proxy:    true,
-						ToFQDNsProxyPort: 1001,
+						EnableL7Proxy: true,
 					}
 				},
 				metrics.NewMetrics,
@@ -96,6 +95,7 @@ func setupTestEnv(t *testing.T) *StandaloneDNSProxy {
 		func(cfg *fqdnconfig.Config) {
 			cfg.EnableStandaloneDNSProxy = true
 			cfg.StandaloneDNSProxyServerPort = 1000
+			cfg.ToFQDNsProxyPort = 1001
 		})
 	tlog := hivetest.Logger(t)
 	if err := h.Start(tlog, t.Context()); err != nil {

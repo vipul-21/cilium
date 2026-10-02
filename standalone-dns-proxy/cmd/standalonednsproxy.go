@@ -69,7 +69,7 @@ func NewStandaloneDNSProxy(params standaloneDNSProxyParams) *StandaloneDNSProxy 
 		enableL7Proxy:                params.AgentConfig.EnableL7Proxy,
 		enableStandaloneDNSProxy:     params.FQDNConfig.EnableStandaloneDNSProxy,
 		standaloneDNSProxyServerPort: uint16(params.FQDNConfig.StandaloneDNSProxyServerPort),
-		proxyPort:                    uint16(params.AgentConfig.ToFQDNsProxyPort),
+		proxyPort:                    uint16(params.FQDNConfig.ToFQDNsProxyPort),
 		connHandler:                  params.ConnectionHandler,
 		dnsProxier:                   params.DNSProxier,
 		db:                           params.DB,

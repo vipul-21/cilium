@@ -38,7 +38,7 @@ type dnsProxyParams struct {
 
 // newDNSProxy initializes the DNS l7 proxy.
 func newDNSProxy(params dnsProxyParams) (proxy.DNSProxier, error) {
-	re.Resize(params.Logger, option.Config.FQDNRegexCompileLRUSize)
+	re.Resize(params.Logger, params.FQDNConfig.FQDNRegexCompileLRUSize)
 
 	// Do not start the proxy in dry mode or if L7 proxy is disabled.
 	// The proxy would not get any traffic in the dry mode anyway, and some of the socket
@@ -56,7 +56,7 @@ func newDNSProxy(params dnsProxyParams) (proxy.DNSProxier, error) {
 		MaxRestoreDNSIPs:       params.FQDNConfig.DNSMaxIPsPerRestoredRule,
 		ConcurrencyLimit:       option.Config.DNSProxyConcurrencyLimit,
 		ConcurrencyGracePeriod: params.FQDNConfig.DNSProxyConcurrencyProcessingGracePeriod,
-		RejectReply:            option.Config.FQDNRejectResponse,
+		RejectReply:            params.FQDNConfig.FQDNRejectResponse,
 	}
 
 	proxy := dnsproxy.NewDNSProxy(

@@ -30,6 +30,9 @@ func TestConfig(t *testing.T) {
 	overridden.FQDNProxyResponseMaxDelay = 2 * time.Second
 	overridden.ToFQDNsPreCache = "/tmp/fqdn-cache.json"
 	overridden.DNSPolicyUnloadOnShutdown = true
+	overridden.ToFQDNsProxyPort = 10053
+	overridden.FQDNRejectResponse = config.FQDNProxyDenyWithNameError
+	overridden.FQDNRegexCompileLRUSize = 2048
 
 	for _, tt := range []struct {
 		name      string
@@ -57,6 +60,9 @@ func TestConfig(t *testing.T) {
 					"--tofqdns-proxy-response-max-delay=2s",
 					"--tofqdns-pre-cache=/tmp/fqdn-cache.json",
 					"--dns-policy-unload-on-shutdown",
+					"--tofqdns-proxy-port=10053",
+					"--tofqdns-dns-reject-response-code=nameError",
+					"--fqdn-regex-compile-lru-size=2048",
 				}))
 			},
 			want: overridden,
@@ -75,6 +81,9 @@ func TestConfig(t *testing.T) {
 				t.Setenv("CILIUM_TOFQDNS_PROXY_RESPONSE_MAX_DELAY", "2s")
 				t.Setenv("CILIUM_TOFQDNS_PRE_CACHE", "/tmp/fqdn-cache.json")
 				t.Setenv("CILIUM_DNS_POLICY_UNLOAD_ON_SHUTDOWN", "true")
+				t.Setenv("CILIUM_TOFQDNS_PROXY_PORT", "10053")
+				t.Setenv("CILIUM_TOFQDNS_DNS_REJECT_RESPONSE_CODE", "nameError")
+				t.Setenv("CILIUM_FQDN_REGEX_COMPILE_LRU_SIZE", "2048")
 			},
 			want: overridden,
 		},
@@ -94,6 +103,9 @@ dnsproxy-lock-timeout: 1s
 tofqdns-proxy-response-max-delay: 2s
 tofqdns-pre-cache: /tmp/fqdn-cache.json
 dns-policy-unload-on-shutdown: true
+tofqdns-proxy-port: 10053
+tofqdns-dns-reject-response-code: nameError
+fqdn-regex-compile-lru-size: 2048
 `)))
 			},
 			want: overridden,
@@ -132,6 +144,8 @@ func TestStandaloneDefaults(t *testing.T) {
 	want.DNSProxyLockCount = 0
 	want.DNSProxyLockTimeout = 0
 	want.FQDNProxyResponseMaxDelay = 0
+	want.FQDNRejectResponse = ""
+	want.FQDNRegexCompileLRUSize = 0
 
 	var got config.Config
 	h := hive.New(
@@ -147,5 +161,6 @@ func TestFlagMetadata(t *testing.T) {
 	config.DefaultConfig.Flags(flags)
 	require.True(t, flags.Lookup(config.DNSProxyLockCount).Hidden)
 	require.True(t, flags.Lookup(config.DNSProxyLockTimeout).Hidden)
+	require.True(t, flags.Lookup(config.FQDNRegexCompileLRUSize).Hidden)
 	require.Equal(t, "This option is obsolete and will be removed in v1.21", flags.Lookup(config.ToFQDNsPreCache).Deprecated)
 }
