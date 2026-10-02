@@ -25,6 +25,7 @@ import (
 	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
@@ -35,6 +36,7 @@ import (
 	endpointtypes "github.com/cilium/cilium/pkg/endpoint/types"
 	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	fqdndns "github.com/cilium/cilium/pkg/fqdn/dns"
+	"github.com/cilium/cilium/pkg/fqdn/proxy/ipfamily"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
@@ -72,9 +74,11 @@ func TestConcurrencyLimitConfig(t *testing.T) {
 		for _, grace := range []time.Duration{0, time.Millisecond} {
 			t.Run(fmt.Sprintf("%d/%s", limit, grace), func(t *testing.T) {
 				proxy := NewDNSProxy(DNSProxyConfig{
-					Logger:                 hivetest.Logger(t),
-					ConcurrencyLimit:       limit,
-					ConcurrencyGracePeriod: grace,
+					Logger: hivetest.Logger(t),
+					Config: fqdnconfig.Config{
+						DNSProxyConcurrencyLimit:                 limit,
+						DNSProxyConcurrencyProcessingGracePeriod: grace,
+					},
 				}, nil, nil)
 				if limit <= 0 {
 					require.Nil(t, proxy.ConcurrencyLimit)
@@ -116,11 +120,47 @@ func TestRejectReplyConfig(t *testing.T) {
 	} {
 		t.Run(tt.response, func(t *testing.T) {
 			proxy := NewDNSProxy(DNSProxyConfig{
-				Logger:      hivetest.Logger(t),
-				RejectReply: tt.response,
+				Logger: hivetest.Logger(t),
+				Config: fqdnconfig.Config{FQDNRejectResponse: tt.response},
 			}, nil, nil)
 			require.Equal(t, tt.want, proxy.rejectReply)
 		})
+	}
+}
+
+func TestPrivilegedSocketConfig(t *testing.T) {
+	testutils.PrivilegedTest(t)
+	for _, family := range []struct {
+		domain int
+		config ipfamily.IPFamily
+	}{
+		{unix.AF_INET, ipfamily.IPv4()},
+		{unix.AF_INET6, ipfamily.IPv6()},
+	} {
+		for _, transparent := range []bool{false, true} {
+			for _, linger := range []int{-1, 0, 3} {
+				t.Run(fmt.Sprintf("%s/transparent=%t/linger=%d", family.config.Name, transparent, linger), func(t *testing.T) {
+					fd, err := unix.Socket(family.domain, unix.SOCK_STREAM, 0)
+					require.NoError(t, err)
+					t.Cleanup(func() { require.NoError(t, unix.Close(fd)) })
+					proxy := NewDNSProxy(DNSProxyConfig{Config: fqdnconfig.Config{
+						DNSProxyEnableTransparentMode: transparent,
+						DNSProxySocketLingerTimeout:   linger,
+					}}, nil, nil)
+					require.NoError(t, proxy.setSoMarks(fd, family.config, identity.ReservedIdentityHost))
+					gotTransparent, err := unix.GetsockoptInt(fd, family.config.SocketOptsFamily, family.config.SocketOptsTransparent)
+					require.NoError(t, err)
+					require.Equal(t, transparent, gotTransparent != 0)
+					gotLinger, err := unix.GetsockoptLinger(fd, unix.SOL_SOCKET, unix.SO_LINGER)
+					require.NoError(t, err)
+					if transparent && linger >= 0 {
+						require.Equal(t, &unix.Linger{Onoff: 1, Linger: int32(linger)}, gotLinger)
+					} else {
+						require.Zero(t, gotLinger.Onoff)
+					}
+				})
+			}
+		}
 	}
 }
 
@@ -151,15 +191,11 @@ func setupDNSProxyTestSuiteWithConfig(tb testing.TB, cfg fqdnconfig.Config) *DNS
 	s.dnsServer = setupServer(tb)
 	require.NotNil(tb, s.dnsServer, "unable to setup DNS server")
 	dnsProxyConfig := DNSProxyConfig{
-		Logger:                 logger,
-		Address:                "",
-		IPv4:                   true,
-		IPv6:                   true,
-		EnableDNSCompression:   true,
-		MaxRestoreDNSIPs:       1000,
-		ConcurrencyLimit:       0,
-		ConcurrencyGracePeriod: 0,
-		RejectReply:            cfg.FQDNRejectResponse,
+		Config:  cfg,
+		Logger:  logger,
+		Address: "",
+		IPv4:    true,
+		IPv6:    true,
 	}
 	proxy := NewDNSProxy(dnsProxyConfig,
 		s,

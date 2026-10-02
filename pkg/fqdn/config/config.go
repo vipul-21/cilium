@@ -28,6 +28,8 @@ const (
 	FQDNRejectResponseCode                   = "tofqdns-dns-reject-response-code"
 	FQDNRegexCompileLRUSize                  = "fqdn-regex-compile-lru-size"
 	DNSProxyConcurrencyLimit                 = "dnsproxy-concurrency-limit"
+	DNSProxyEnableTransparentMode            = "dnsproxy-enable-transparent-mode"
+	DNSProxySocketLingerTimeout              = "dnsproxy-socket-linger-timeout"
 
 	FQDNProxyDenyWithNameError = "nameError"
 	FQDNProxyDenyWithRefused   = "refused"
@@ -51,6 +53,8 @@ type Config struct {
 	FQDNRejectResponse                       string `mapstructure:"tofqdns-dns-reject-response-code"`
 	FQDNRegexCompileLRUSize                  uint
 	DNSProxyConcurrencyLimit                 int
+	DNSProxyEnableTransparentMode            bool
+	DNSProxySocketLingerTimeout              int
 }
 
 var DefaultConfig = Config{
@@ -65,6 +69,7 @@ var DefaultConfig = Config{
 	FQDNProxyResponseMaxDelay:                100 * time.Millisecond,
 	FQDNRejectResponse:                       FQDNProxyDenyWithRefused,
 	FQDNRegexCompileLRUSize:                  1024,
+	DNSProxySocketLingerTimeout:              10,
 }
 
 // These legacy flags were not registered by standalone-dns-proxy, so absent
@@ -76,6 +81,7 @@ var DefaultStandaloneConfig = func() Config {
 	cfg.FQDNProxyResponseMaxDelay = 0
 	cfg.FQDNRejectResponse = ""
 	cfg.FQDNRegexCompileLRUSize = 0
+	cfg.DNSProxySocketLingerTimeout = 0
 	return cfg
 }()
 
@@ -99,4 +105,7 @@ func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.Uint(FQDNRegexCompileLRUSize, def.FQDNRegexCompileLRUSize, "Size of the FQDN regex compilation LRU. Useful for heavy but repeated DNS L7 rules with MatchName or MatchPattern")
 	flags.MarkHidden(FQDNRegexCompileLRUSize)
 	flags.Int(DNSProxyConcurrencyLimit, def.DNSProxyConcurrencyLimit, "Limit concurrency of DNS message processing")
+	flags.Bool(DNSProxyEnableTransparentMode, def.DNSProxyEnableTransparentMode, "Enable DNS proxy transparent mode")
+	flags.Int(DNSProxySocketLingerTimeout, def.DNSProxySocketLingerTimeout, "Timeout (in seconds) when closing the connection between the DNS proxy and the upstream server. "+
+		"If set to 0, the connection is closed immediately (with TCP RST). If set to -1, the connection is closed asynchronously in the background")
 }

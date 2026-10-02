@@ -369,13 +369,6 @@ const (
 	// previously active connections with expired DNS lookups are still considered alive
 	ToFQDNsIdleConnectionGracePeriod = "tofqdns-idle-connection-grace-period"
 
-	// DNSProxySocketLingerTimeout defines how many seconds we wait for the connection
-	// between the DNS proxy and the upstream server to be closed.
-	DNSProxySocketLingerTimeout = "dnsproxy-socket-linger-timeout"
-
-	// DNSProxyEnableTransparentMode enables transparent mode for the DNS proxy.
-	DNSProxyEnableTransparentMode = "dnsproxy-enable-transparent-mode"
-
 	// DNSProxyInsecureSkipTransparentModeCheck is a hidden flag that allows users
 	// to disable transparent mode even if IPSec is enabled
 	DNSProxyInsecureSkipTransparentModeCheck = "dnsproxy-insecure-skip-transparent-mode-check"
@@ -1414,13 +1407,6 @@ type DaemonConfig struct {
 	// previously active connections with expired DNS lookups are
 	// still considered alive
 	ToFQDNsIdleConnectionGracePeriod time.Duration
-
-	// DNSProxyEnableTransparentMode enables transparent mode for the DNS proxy.
-	DNSProxyEnableTransparentMode bool
-
-	// DNSProxySocketLingerTimeout defines how many seconds we wait for the connection
-	// between the DNS proxy and the upstream server to be closed.
-	DNSProxySocketLingerTimeout int
 
 	// EnableBPFTProxy enables implementing proxy redirection via BPF
 	// mechanisms rather than iptables rules.
@@ -2581,8 +2567,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 		c.ToFQDNsMinTTL = defaults.ToFQDNsMinTTL
 	}
 	c.ToFQDNsIdleConnectionGracePeriod = vp.GetDuration(ToFQDNsIdleConnectionGracePeriod)
-	c.DNSProxyEnableTransparentMode = vp.GetBool(DNSProxyEnableTransparentMode)
-	c.DNSProxySocketLingerTimeout = vp.GetInt(DNSProxySocketLingerTimeout)
 
 	subnets, err := ip.ParsePrefixes(vp.GetStringSlice(IPv4PodSubnets))
 	if err != nil {

@@ -48,15 +48,11 @@ func newDNSProxy(params dnsProxyParams) (proxy.DNSProxier, error) {
 	}
 
 	dnsProxyConfig := dnsproxy.DNSProxyConfig{
-		Logger:                 params.Logger,
-		Address:                "",
-		IPv4:                   option.Config.EnableIPv4,
-		IPv6:                   option.Config.EnableIPv6,
-		EnableDNSCompression:   params.FQDNConfig.ToFQDNsEnableDNSCompression,
-		MaxRestoreDNSIPs:       params.FQDNConfig.DNSMaxIPsPerRestoredRule,
-		ConcurrencyLimit:       params.FQDNConfig.DNSProxyConcurrencyLimit,
-		ConcurrencyGracePeriod: params.FQDNConfig.DNSProxyConcurrencyProcessingGracePeriod,
-		RejectReply:            params.FQDNConfig.FQDNRejectResponse,
+		Config:  params.FQDNConfig,
+		Logger:  params.Logger,
+		Address: "",
+		IPv4:    option.Config.EnableIPv4,
+		IPv6:    option.Config.EnableIPv6,
 	}
 
 	proxy := dnsproxy.NewDNSProxy(

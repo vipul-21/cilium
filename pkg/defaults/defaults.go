@@ -131,13 +131,6 @@ const (
 	// still considered alive
 	ToFQDNsIdleConnectionGracePeriod = 0 * time.Second
 
-	// DNSProxyEnableTransparentMode enables transparent mode for the DNS proxy.
-	DNSProxyEnableTransparentMode = false
-
-	// DNSProxySocketLingerTimeout defines how many seconds we wait for the connection
-	// between the DNS proxy and the upstream server to be closed.
-	DNSProxySocketLingerTimeout = 10
-
 	// IdentityChangeGracePeriod is the default value for
 	// option.IdentityChangeGracePeriod
 	IdentityChangeGracePeriod = 5 * time.Second

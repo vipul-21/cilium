@@ -28,7 +28,7 @@ func initAndValidateDaemonConfig(params daemonConfigParams) error {
 	}
 
 	if !params.IPSecConfig.DNSProxyInsecureSkipTransparentModeCheckEnabled() {
-		if params.IPSecConfig.Enabled() && params.DaemonConfig.EnableL7Proxy && !params.DaemonConfig.DNSProxyEnableTransparentMode {
+		if params.IPSecConfig.Enabled() && params.DaemonConfig.EnableL7Proxy && !params.FQDNConfig.DNSProxyEnableTransparentMode {
 			return fmt.Errorf("IPSec requires DNS proxy transparent mode to be enabled (--dnsproxy-enable-transparent-mode=\"true\")")
 		}
 	}

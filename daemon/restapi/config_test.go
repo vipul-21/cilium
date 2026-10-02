@@ -4,13 +4,44 @@
 package restapi
 
 import (
+	"fmt"
+	"strconv"
 	"testing"
 
+	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cilium/cilium/pkg/datapath/tunnel"
+	"github.com/cilium/cilium/pkg/defaults"
 	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/option"
+	fakewireguard "github.com/cilium/cilium/pkg/wireguard/fake"
+	wgTypes "github.com/cilium/cilium/pkg/wireguard/types"
 )
+
+func TestReservedPortsConfig(t *testing.T) {
+	for _, tt := range []struct {
+		transparent bool
+		reserved    string
+		want        string
+	}{
+		{false, defaults.ContainerIPLocalReservedPortsAuto, ""},
+		{true, defaults.ContainerIPLocalReservedPortsAuto, strconv.Itoa(wgTypes.ListenPort)},
+		{false, "12345", "12345"},
+		{true, "12345", "12345"},
+	} {
+		t.Run(fmt.Sprintf("%t/%s", tt.transparent, tt.reserved), func(t *testing.T) {
+			handler := getConfigHandler{
+				logger:       hivetest.Logger(t),
+				daemonConfig: &option.DaemonConfig{ContainerIPLocalReservedPorts: tt.reserved},
+				fqdnConfig:   fqdnconfig.Config{DNSProxyEnableTransparentMode: tt.transparent},
+				wgConfig:     fakewireguard.Config{EnableWireguard: true},
+				tunnelConfig: tunnel.NewTestConfig(tunnel.Disabled),
+			}
+			require.Equal(t, tt.want, handler.getIPLocalReservedPorts())
+		})
+	}
+}
 
 func TestGetConfigMap(t *testing.T) {
 	cfg := fqdnconfig.DefaultConfig

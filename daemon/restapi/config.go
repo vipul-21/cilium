@@ -491,11 +491,11 @@ func (h *getConfigHandler) getNodeRouterAddressing(ctx context.Context) (*models
 // conflict when running with DNS transparent proxy mode.
 // This is a workaround for cilium/cilium#31535
 func (h *getConfigHandler) getIPLocalReservedPorts() string {
-	if option.Config.ContainerIPLocalReservedPorts != defaults.ContainerIPLocalReservedPortsAuto {
-		return option.Config.ContainerIPLocalReservedPorts
+	if h.daemonConfig.ContainerIPLocalReservedPorts != defaults.ContainerIPLocalReservedPortsAuto {
+		return h.daemonConfig.ContainerIPLocalReservedPorts
 	}
 
-	if !option.Config.DNSProxyEnableTransparentMode {
+	if !h.fqdnConfig.DNSProxyEnableTransparentMode {
 		return "" // no ports to reserve
 	}
 

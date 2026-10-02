@@ -559,15 +559,11 @@ func (allow perEPAllow) getPortRulesForID(logger *slog.Logger, endpointID uint64
 
 // DNSProxyConfig is the configuration for the DNS proxy.
 type DNSProxyConfig struct {
-	Logger                 *slog.Logger
-	Address                string
-	IPv4                   bool
-	IPv6                   bool
-	EnableDNSCompression   bool
-	MaxRestoreDNSIPs       int
-	ConcurrencyLimit       int
-	ConcurrencyGracePeriod time.Duration
-	RejectReply            string
+	fqdnconfig.Config
+	Logger  *slog.Logger
+	Address string
+	IPv4    bool
+	IPv6    bool
 }
 
 // NewDNSProxy creates a proxy used for DNS L7 redirects that listens on
@@ -591,24 +587,24 @@ func NewDNSProxy(dnsProxyConfig DNSProxyConfig, proxyLookupHandler lookup.ProxyL
 		restored:                 make(perEPRestored),
 		restoredEPs:              make(restoredEPs),
 		cache:                    make(regexCache),
-		EnableDNSCompression:     dnsProxyConfig.EnableDNSCompression,
-		maxIPsPerRestoredDNSRule: dnsProxyConfig.MaxRestoreDNSIPs,
+		EnableDNSCompression:     dnsProxyConfig.ToFQDNsEnableDNSCompression,
+		maxIPsPerRestoredDNSRule: dnsProxyConfig.DNSMaxIPsPerRestoredRule,
 		DNSClients:               NewSharedClients(),
 		rejectReply:              dns.RcodeRefused,
 	}
-	if dnsProxyConfig.ConcurrencyLimit > 0 {
-		p.ConcurrencyLimit = semaphore.NewWeighted(int64(dnsProxyConfig.ConcurrencyLimit))
-		p.ConcurrencyGracePeriod = dnsProxyConfig.ConcurrencyGracePeriod
+	if dnsProxyConfig.DNSProxyConcurrencyLimit > 0 {
+		p.ConcurrencyLimit = semaphore.NewWeighted(int64(dnsProxyConfig.DNSProxyConcurrencyLimit))
+		p.ConcurrencyGracePeriod = dnsProxyConfig.DNSProxyConcurrencyProcessingGracePeriod
 	}
 
-	switch strings.ToLower(dnsProxyConfig.RejectReply) {
+	switch strings.ToLower(dnsProxyConfig.FQDNRejectResponse) {
 	case strings.ToLower(fqdnconfig.FQDNProxyDenyWithNameError):
 		p.rejectReply = dns.RcodeNameError
 	case strings.ToLower(fqdnconfig.FQDNProxyDenyWithRefused), "":
 		p.rejectReply = dns.RcodeRefused
 	default:
 		p.logger.Info(fmt.Sprintf("DNS reject response '%s' is not valid, available options are '%v'",
-			dnsProxyConfig.RejectReply, fqdnconfig.FQDNRejectOptions))
+			dnsProxyConfig.FQDNRejectResponse, fqdnconfig.FQDNRejectOptions))
 	}
 
 	return p
@@ -627,7 +623,7 @@ func (p *DNSProxy) Listen(port uint16) error {
 
 	start := time.Now()
 	for time.Since(start) < ProxyBindTimeout {
-		dnsServers, bindPort, err = bindToAddr(p.logger, p.cfg.Address, port, p, p.cfg.IPv4, p.cfg.IPv6, p.DNSClients)
+		dnsServers, bindPort, err = bindToAddr(p.logger, p.cfg.Address, port, p, p.cfg.IPv4, p.cfg.IPv6, p.cfg.DNSProxyEnableTransparentMode, p.DNSClients)
 		if err == nil {
 			break
 		}
@@ -822,7 +818,7 @@ func (p *DNSProxy) CheckAllowed(endpointID uint64, destPortProto restore.PortPro
 //   - So the client socket can not be left lingering around, as it causes network traffic destined
 //     for the source pod to be intercepted to the dnsproxy, which is exactly what we want but only
 //     until a DNS response has been received.
-func setSoMarks(fd int, ipFamily ipfamily.IPFamily, secId identity.NumericIdentity) error {
+func (p *DNSProxy) setSoMarks(fd int, ipFamily ipfamily.IPFamily, secId identity.NumericIdentity) error {
 	// Set SO_MARK to allow datapath to know these upstream packets from an egress proxy
 	mark := linux_defaults.MakeMagicMark(linux_defaults.MagicMarkEgress, secId)
 	err := unix.SetsockoptUint64(fd, unix.SOL_SOCKET, unix.SO_MARK, uint64(mark))
@@ -831,7 +827,7 @@ func setSoMarks(fd int, ipFamily ipfamily.IPFamily, secId identity.NumericIdenti
 	}
 
 	// Rest of the options are only set in the transparent mode.
-	if !option.Config.DNSProxyEnableTransparentMode {
+	if !p.cfg.DNSProxyEnableTransparentMode {
 		return nil
 	}
 
@@ -869,7 +865,7 @@ func setSoMarks(fd int, ipFamily ipfamily.IPFamily, secId identity.NumericIdenti
 	// If that happens, the connect() call will fail with EADDRNOTAVAIL.
 	// Note that the linger timeout can also be set to 0, in which case the socket is
 	// terminated forcefully with a TCP RST and thus can also be reused immediately.
-	if linger := option.Config.DNSProxySocketLingerTimeout; linger >= 0 {
+	if linger := p.cfg.DNSProxySocketLingerTimeout; linger >= 0 {
 		err = unix.SetsockoptLinger(fd, unix.SOL_SOCKET, unix.SO_LINGER, &unix.Linger{
 			Onoff:  1,
 			Linger: int32(linger),
@@ -1057,7 +1053,7 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 		Control: func(network, address string, c syscall.RawConn) error {
 			var soerr error
 			if err := c.Control(func(su uintptr) {
-				soerr = setSoMarks(int(su), ipFamily, ep.GetIdentity())
+				soerr = p.setSoMarks(int(su), ipFamily, ep.GetIdentity())
 			}); err != nil {
 				return err
 			}
@@ -1072,7 +1068,7 @@ func (p *DNSProxy) ServeDNS(w dns.ResponseWriter, request *dns.Msg) {
 	// - the source is known to be in the host networking namespace, or
 	// - the destination is known to be outside of the cluster, or
 	// - is the local host
-	if option.Config.DNSProxyEnableTransparentMode && !ep.IsHost() && !epAddr.IsLoopback() && targetServerID.IsCluster() && targetServerID != identity.ReservedIdentityHost {
+	if p.cfg.DNSProxyEnableTransparentMode && !ep.IsHost() && !epAddr.IsLoopback() && targetServerID.IsCluster() && targetServerID != identity.ReservedIdentityHost {
 		dialer.LocalAddr = w.RemoteAddr()
 		key = sharedClientKey(protocol, epIPPort, targetServerAddrStr)
 	}
@@ -1153,7 +1149,7 @@ func (p *DNSProxy) enforceConcurrencyLimit(ctx context.Context) error {
 		// immediately give up.
 		if !p.ConcurrencyLimit.TryAcquire(1) {
 			return ErrFailedAcquireSemaphore{
-				parallel: p.cfg.ConcurrencyLimit,
+				parallel: p.cfg.DNSProxyConcurrencyLimit,
 			}
 		}
 	} else if err := p.ConcurrencyLimit.Acquire(ctx, 1); err != nil && errors.Is(err, context.DeadlineExceeded) {
@@ -1162,7 +1158,7 @@ func (p *DNSProxy) enforceConcurrencyLimit(ctx context.Context) error {
 		// treated the same as context.DeadlineExceeded.
 		return ErrTimedOutAcquireSemaphore{
 			ErrFailedAcquireSemaphore: ErrFailedAcquireSemaphore{
-				parallel: p.cfg.ConcurrencyLimit,
+				parallel: p.cfg.DNSProxyConcurrencyLimit,
 			},
 			gracePeriod: p.ConcurrencyGracePeriod,
 		}
@@ -1291,7 +1287,7 @@ func ExtractResponseMsgDetails(msg *dns.Msg) (*MsgDetails, error) {
 // Note: This mimics what the dns package does EXCEPT for setting reuseport.
 // This is ok for now but it would simplify proxy management in the future to
 // have it set.
-func bindToAddr(logger *slog.Logger, address string, port uint16, handler dns.Handler, ipv4, ipv6 bool, sc *SharedClients) (dnsServers []*dns.Server, bindPort uint16, err error) {
+func bindToAddr(logger *slog.Logger, address string, port uint16, handler dns.Handler, ipv4, ipv6, transparentMode bool, sc *SharedClients) (dnsServers []*dns.Server, bindPort uint16, err error) {
 	defer func() {
 		if err != nil {
 			shutdownServers(logger, dnsServers)
@@ -1313,7 +1309,7 @@ func bindToAddr(logger *slog.Logger, address string, port uint16, handler dns.Ha
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to listen on %s: %w", ipFamily.TCPAddress, err)
 		}
-		if option.Config.DNSProxyEnableTransparentMode {
+		if transparentMode {
 			// The wrapper is only necessary to forward the closing signal in transparent mode.
 			tcpListener = &wrappedTCPListener{sc: sc, Listener: tcpListener}
 		}

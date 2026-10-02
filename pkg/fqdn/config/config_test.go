@@ -34,6 +34,8 @@ func TestConfig(t *testing.T) {
 	overridden.FQDNRejectResponse = config.FQDNProxyDenyWithNameError
 	overridden.FQDNRegexCompileLRUSize = 2048
 	overridden.DNSProxyConcurrencyLimit = 7
+	overridden.DNSProxyEnableTransparentMode = true
+	overridden.DNSProxySocketLingerTimeout = -1
 
 	for _, tt := range []struct {
 		name      string
@@ -65,6 +67,8 @@ func TestConfig(t *testing.T) {
 					"--tofqdns-dns-reject-response-code=nameError",
 					"--fqdn-regex-compile-lru-size=2048",
 					"--dnsproxy-concurrency-limit=7",
+					"--dnsproxy-enable-transparent-mode",
+					"--dnsproxy-socket-linger-timeout=-1",
 				}))
 			},
 			want: overridden,
@@ -87,6 +91,8 @@ func TestConfig(t *testing.T) {
 				t.Setenv("CILIUM_TOFQDNS_DNS_REJECT_RESPONSE_CODE", "nameError")
 				t.Setenv("CILIUM_FQDN_REGEX_COMPILE_LRU_SIZE", "2048")
 				t.Setenv("CILIUM_DNSPROXY_CONCURRENCY_LIMIT", "7")
+				t.Setenv("CILIUM_DNSPROXY_ENABLE_TRANSPARENT_MODE", "true")
+				t.Setenv("CILIUM_DNSPROXY_SOCKET_LINGER_TIMEOUT", "-1")
 			},
 			want: overridden,
 		},
@@ -110,6 +116,8 @@ tofqdns-proxy-port: 10053
 tofqdns-dns-reject-response-code: nameError
 fqdn-regex-compile-lru-size: 2048
 dnsproxy-concurrency-limit: 7
+dnsproxy-enable-transparent-mode: true
+dnsproxy-socket-linger-timeout: -1
 `)))
 			},
 			want: overridden,
@@ -150,6 +158,7 @@ func TestStandaloneDefaults(t *testing.T) {
 	want.FQDNProxyResponseMaxDelay = 0
 	want.FQDNRejectResponse = ""
 	want.FQDNRegexCompileLRUSize = 0
+	want.DNSProxySocketLingerTimeout = 0
 
 	var got config.Config
 	h := hive.New(
