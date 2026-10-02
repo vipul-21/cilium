@@ -15,12 +15,12 @@ import (
 
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/metrics"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/u8proto"
@@ -77,6 +77,7 @@ type DNSMessageHandler interface {
 
 type dnsMessageHandler struct {
 	logger            *slog.Logger
+	config            fqdnconfig.Config
 	nameManager       namemanager.NameManager
 	proxyAccessLogger accesslog.ProxyAccessLogger
 	DNSRequestHandler DNSMessageHandler
@@ -317,11 +318,11 @@ func (h *dnsMessageHandler) UpdateOnDNSMsg(lookupTime time.Time, ep *endpoint.En
 	h.nameManager.LockName(qname)
 	stat.QnameLockTime.End(true)
 
-	if d := time.Since(mutexAcquireStart); d >= option.Config.DNSProxyLockTimeout {
-		h.logger.Warn(fmt.Sprintf("Name lock acquisition time took longer than expected. Potentially too many parallel DNS requests being processed, consider adjusting --%s and/or --%s", option.DNSProxyLockCount, option.DNSProxyLockTimeout),
+	if d := time.Since(mutexAcquireStart); d >= h.config.DNSProxyLockTimeout {
+		h.logger.Warn(fmt.Sprintf("Name lock acquisition time took longer than expected. Potentially too many parallel DNS requests being processed, consider adjusting --%s and/or --%s", fqdnconfig.DNSProxyLockCount, fqdnconfig.DNSProxyLockTimeout),
 			logfields.DNSName, qname,
 			logfields.Duration, d,
-			logfields.Expected, option.Config.DNSProxyLockTimeout,
+			logfields.Expected, h.config.DNSProxyLockTimeout,
 		)
 	}
 
@@ -348,7 +349,7 @@ func (h *dnsMessageHandler) UpdateOnDNSMsg(lookupTime time.Time, ep *endpoint.En
 		logfields.IPAddrs, responseIPs,
 	)
 
-	updateCtx, updateCancel := context.WithTimeout(context.Background(), option.Config.FQDNProxyResponseMaxDelay)
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), h.config.FQDNProxyResponseMaxDelay)
 	defer updateCancel()
 	updateStart := time.Now()
 

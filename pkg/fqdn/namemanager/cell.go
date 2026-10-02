@@ -31,11 +31,10 @@ var Cell = cell.Module(
 
 	cell.ProvidePrivate(func(dc *option.DaemonConfig) NameManagerConfig {
 		return NameManagerConfig{
-			MinTTL:            dc.ToFQDNsMinTTL,
-			DNSProxyLockCount: dc.DNSProxyLockCount,
-			StateDir:          dc.StateDir,
-			EnableIPv4:        dc.EnableIPv4,
-			EnableIPv6:        dc.EnableIPv6,
+			MinTTL:     dc.ToFQDNsMinTTL,
+			StateDir:   dc.StateDir,
+			EnableIPv4: dc.EnableIPv4,
+			EnableIPv6: dc.EnableIPv6,
 		}
 	}),
 	cell.ProvidePrivate(adaptors),
@@ -49,9 +48,6 @@ var Cell = cell.Module(
 type NameManagerConfig struct {
 	// MinTTL is the minimum TTL value that a cache entry can have.
 	MinTTL int
-
-	// DNSProxyLockCount is used to shard serialization of updates to DNS names.
-	DNSProxyLockCount int
 
 	// StateDir is the directory where namemanager checkpoints are stored.
 	StateDir string

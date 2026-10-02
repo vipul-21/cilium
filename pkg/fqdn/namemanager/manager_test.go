@@ -18,9 +18,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
-	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dns"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ip"
@@ -46,6 +46,22 @@ var (
 		MatchPattern: "*cilium.io.",
 	}
 )
+
+func TestNameManagerLockConfig(t *testing.T) {
+	for _, count := range []int{3, 7} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			cfg := fqdnconfig.DefaultConfig
+			cfg.DNSProxyLockCount = count
+			manager := New(ManagerParams{
+				Logger:     hivetest.Logger(t),
+				FQDNConfig: cfg,
+			})
+			require.Len(t, manager.nameLocks, count)
+			manager.LockName("cilium.io.")
+			manager.UnlockName("cilium.io.")
+		})
+	}
+}
 
 func TestMapIPsToSelectors(t *testing.T) {
 	logger := hivetest.Logger(t)
@@ -142,11 +158,11 @@ func TestNameManagerIPCacheUpdates(t *testing.T) {
 	nameManager := New(ManagerParams{
 		Logger: logger,
 		Config: NameManagerConfig{
-			MinTTL:            1,
-			DNSProxyLockCount: defaults.DNSProxyLockCount,
-			StateDir:          option.Config.StateDir,
+			MinTTL:   1,
+			StateDir: option.Config.StateDir,
 		},
-		IPCache: ipc,
+		FQDNConfig: fqdnconfig.DefaultConfig,
+		IPCache:    ipc,
 	})
 
 	err := ipc.WaitForRevision(t.Context(), nameManager.RegisterFQDNSelector(ciliumIOSel))
@@ -257,12 +273,12 @@ func TestNameManagerGCConsistency(t *testing.T) {
 	nameManager := New(ManagerParams{
 		Logger: logger,
 		Config: NameManagerConfig{
-			MinTTL:            1,
-			DNSProxyLockCount: defaults.DNSProxyLockCount,
-			StateDir:          option.Config.StateDir,
+			MinTTL:   1,
+			StateDir: option.Config.StateDir,
 		},
-		EPMgr:   &epMgr,
-		IPCache: ipc,
+		FQDNConfig: fqdnconfig.DefaultConfig,
+		EPMgr:      &epMgr,
+		IPCache:    ipc,
 	})
 	// Manually configure bootstrap to be done to fully test manager end-to-end
 	nameManager.bootstrapCompleted = true

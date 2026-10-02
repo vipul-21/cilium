@@ -118,7 +118,7 @@ func setupClientAndServer(t *testing.T) (ConnectionHandler, *mockFqdnDataServer,
 	}()
 
 	h := hive.New(
-		fqdnconfig.Cell,
+		fqdnconfig.StandaloneCell,
 		cell.Provide(newDNSRulesTable),
 		cell.Provide(NewIPtoEndpointTable),
 		cell.Provide(NewPrefixToIdentityTable),

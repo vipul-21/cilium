@@ -15,7 +15,6 @@ import (
 	"github.com/cilium/cilium/pkg/fqdn"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/metrics"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 )
 
@@ -165,7 +164,7 @@ func (n *manager) doGC(ctx context.Context) error {
 func (n *manager) RestorationNotify(possibleEndpoints map[uint16]*endpoint.Endpoint) {
 	// Prefill the cache with the CLI provided pre-cache data. This allows various bridging arrangements during upgrades, or just ensure critical DNS mappings remain.
 	// TODO: remove this; it was needed for the v1.3-v1.4 upgrade
-	preCachePath := option.Config.ToFQDNsPreCache
+	preCachePath := n.params.FQDNConfig.ToFQDNsPreCache
 	if preCachePath != "" {
 		n.logger.Info("Reading toFQDNs pre-cache data")
 		precache, err := readPreCache(preCachePath)

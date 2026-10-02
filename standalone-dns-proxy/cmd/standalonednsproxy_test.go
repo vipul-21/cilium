@@ -70,7 +70,7 @@ func setupTestEnv(t *testing.T) *StandaloneDNSProxy {
 		cell.Module(
 			"test-standalone-dns-proxy",
 			"Test standalone DNS proxy",
-			fqdnconfig.Cell,
+			fqdnconfig.StandaloneCell,
 			client.Cell,
 			bootstrap.Cell,
 			lookup.Cell,

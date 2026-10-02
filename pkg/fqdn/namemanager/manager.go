@@ -78,7 +78,7 @@ func New(params ManagerParams) *manager {
 		allSelectors: make(map[api.FQDNSelector]*regexp.Regexp),
 		selectorIDs:  make(map[api.FQDNSelector][]identity.NumericIdentity),
 		cache:        cache,
-		nameLocks:    make([]*lock.Mutex, params.Config.DNSProxyLockCount),
+		nameLocks:    make([]*lock.Mutex, params.FQDNConfig.DNSProxyLockCount),
 	}
 
 	for i := range n.nameLocks {
@@ -394,13 +394,13 @@ func (n *manager) maybeRemoveMetadata(maybeRemoved map[netip.Addr][]string) {
 // Rather than having a potentially unbounded set of per-name locks, this
 // buckets names in to a set of locks. The lock count is configurable.
 func (n *manager) LockName(name string) {
-	idx := nameLockIndex(name, n.params.Config.DNSProxyLockCount)
+	idx := nameLockIndex(name, n.params.FQDNConfig.DNSProxyLockCount)
 	n.nameLocks[idx].Lock()
 }
 
 // UnlockName releases a lock previously acquired by LockName()
 func (n *manager) UnlockName(name string) {
-	idx := nameLockIndex(name, n.params.Config.DNSProxyLockCount)
+	idx := nameLockIndex(name, n.params.FQDNConfig.DNSProxyLockCount)
 	n.nameLocks[idx].Unlock()
 }
 

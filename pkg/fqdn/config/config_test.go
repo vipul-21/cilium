@@ -25,6 +25,11 @@ func TestConfig(t *testing.T) {
 	overridden.DNSMaxIPsPerRestoredRule = 23
 	overridden.DNSProxyConcurrencyProcessingGracePeriod = 250 * time.Millisecond
 	overridden.ToFQDNsPreAllocate = false
+	overridden.DNSProxyLockCount = 17
+	overridden.DNSProxyLockTimeout = time.Second
+	overridden.FQDNProxyResponseMaxDelay = 2 * time.Second
+	overridden.ToFQDNsPreCache = "/tmp/fqdn-cache.json"
+	overridden.DNSPolicyUnloadOnShutdown = true
 
 	for _, tt := range []struct {
 		name      string
@@ -47,6 +52,11 @@ func TestConfig(t *testing.T) {
 					"--dns-max-ips-per-restored-rule=23",
 					"--dnsproxy-concurrency-processing-grace-period=250ms",
 					"--tofqdns-preallocate-identities=false",
+					"--dnsproxy-lock-count=17",
+					"--dnsproxy-lock-timeout=1s",
+					"--tofqdns-proxy-response-max-delay=2s",
+					"--tofqdns-pre-cache=/tmp/fqdn-cache.json",
+					"--dns-policy-unload-on-shutdown",
 				}))
 			},
 			want: overridden,
@@ -60,6 +70,11 @@ func TestConfig(t *testing.T) {
 				t.Setenv("CILIUM_DNS_MAX_IPS_PER_RESTORED_RULE", "23")
 				t.Setenv("CILIUM_DNSPROXY_CONCURRENCY_PROCESSING_GRACE_PERIOD", "250ms")
 				t.Setenv("CILIUM_TOFQDNS_PREALLOCATE_IDENTITIES", "false")
+				t.Setenv("CILIUM_DNSPROXY_LOCK_COUNT", "17")
+				t.Setenv("CILIUM_DNSPROXY_LOCK_TIMEOUT", "1s")
+				t.Setenv("CILIUM_TOFQDNS_PROXY_RESPONSE_MAX_DELAY", "2s")
+				t.Setenv("CILIUM_TOFQDNS_PRE_CACHE", "/tmp/fqdn-cache.json")
+				t.Setenv("CILIUM_DNS_POLICY_UNLOAD_ON_SHUTDOWN", "true")
 			},
 			want: overridden,
 		},
@@ -74,23 +89,63 @@ tofqdns-enable-dns-compression: false
 dns-max-ips-per-restored-rule: 23
 dnsproxy-concurrency-processing-grace-period: 250ms
 tofqdns-preallocate-identities: false
+dnsproxy-lock-count: 17
+dnsproxy-lock-timeout: 1s
+tofqdns-proxy-response-max-delay: 2s
+tofqdns-pre-cache: /tmp/fqdn-cache.json
+dns-policy-unload-on-shutdown: true
 `)))
 			},
 			want: overridden,
 		},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			var got config.Config
-			h := hive.NewWithOptions(
-				hive.Options{EnvPrefix: "CILIUM_"},
-				config.Cell,
-				cell.Invoke(func(cfg config.Config) { got = cfg }),
-			)
-			if tt.configure != nil {
-				tt.configure(t, h)
-			}
-			require.NoError(t, h.Populate(hivetest.Logger(t)))
-			require.Equal(t, tt.want, got)
-		})
+		for _, profile := range []struct {
+			name     string
+			cell     cell.Cell
+			defaults config.Config
+		}{
+			{"agent", config.Cell, config.DefaultConfig},
+			{"standalone", config.StandaloneCell, config.DefaultStandaloneConfig},
+		} {
+			t.Run(profile.name+"/"+tt.name, func(t *testing.T) {
+				var got config.Config
+				h := hive.NewWithOptions(
+					hive.Options{EnvPrefix: "CILIUM_"},
+					profile.cell,
+					cell.Invoke(func(cfg config.Config) { got = cfg }),
+				)
+				want := tt.want
+				if tt.configure != nil {
+					tt.configure(t, h)
+				} else {
+					want = profile.defaults
+				}
+				require.NoError(t, h.Populate(hivetest.Logger(t)))
+				require.Equal(t, want, got)
+			})
+		}
 	}
+}
+
+func TestStandaloneDefaults(t *testing.T) {
+	want := config.DefaultConfig
+	want.DNSProxyLockCount = 0
+	want.DNSProxyLockTimeout = 0
+	want.FQDNProxyResponseMaxDelay = 0
+
+	var got config.Config
+	h := hive.New(
+		config.StandaloneCell,
+		cell.Invoke(func(cfg config.Config) { got = cfg }),
+	)
+	require.NoError(t, h.Populate(hivetest.Logger(t)))
+	require.Equal(t, want, got)
+}
+
+func TestFlagMetadata(t *testing.T) {
+	flags := pflag.NewFlagSet(t.Name(), pflag.ContinueOnError)
+	config.DefaultConfig.Flags(flags)
+	require.True(t, flags.Lookup(config.DNSProxyLockCount).Hidden)
+	require.True(t, flags.Lookup(config.DNSProxyLockTimeout).Hidden)
+	require.Equal(t, "This option is obsolete and will be removed in v1.21", flags.Lookup(config.ToFQDNsPreCache).Deprecated)
 }

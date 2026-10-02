@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/hive/cell"
 
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
 	"github.com/cilium/cilium/pkg/proxy/accesslog"
 )
@@ -28,6 +29,7 @@ type DNSMessageHandlerParams struct {
 
 	Lifecycle         cell.Lifecycle
 	Logger            *slog.Logger
+	Config            fqdnconfig.Config
 	NameManager       namemanager.NameManager
 	ProxyAccessLogger accesslog.ProxyAccessLogger
 }
@@ -35,6 +37,7 @@ type DNSMessageHandlerParams struct {
 func NewDNSMessageHandler(params DNSMessageHandlerParams) DNSMessageHandler {
 	handler := &dnsMessageHandler{
 		logger:            params.Logger,
+		config:            params.Config,
 		nameManager:       params.NameManager,
 		proxyAccessLogger: params.ProxyAccessLogger,
 	}

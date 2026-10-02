@@ -135,26 +135,8 @@ const (
 	// still considered alive
 	ToFQDNsIdleConnectionGracePeriod = 0 * time.Second
 
-	// FQDNProxyResponseMaxDelay The maximum time the DNS proxy holds an allowed
-	// DNS response before sending it along. Responses are sent as soon as the
-	// datapath is updated with the new IP information.
-	FQDNProxyResponseMaxDelay = 100 * time.Millisecond
-
-	// ToFQDNsPreCache is a path to a file with DNS cache data to insert into the
-	// global cache on startup.
-	// The file is not re-read after agent start.
-	ToFQDNsPreCache = ""
-
 	// DNSProxyEnableTransparentMode enables transparent mode for the DNS proxy.
 	DNSProxyEnableTransparentMode = false
-
-	// DNSProxyLockCount is the default array size containing mutexes which protect
-	// against parallel handling of DNS response names.
-	DNSProxyLockCount = 131
-
-	// DNSProxyLockTimeout is the default timeout when acquiring the locks controlled by
-	// DNSProxyLockCount.
-	DNSProxyLockTimeout = 500 * time.Millisecond
 
 	// DNSProxySocketLingerTimeout defines how many seconds we wait for the connection
 	// between the DNS proxy and the upstream server to be closed.

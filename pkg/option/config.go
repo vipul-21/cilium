@@ -354,9 +354,6 @@ const (
 	// CMDRef is the path to cmdref output directory
 	CMDRef = "cmdref"
 
-	// DNSPolicyUnloadOnShutdown is the name of the dns-policy-unload-on-shutdown option.
-	DNSPolicyUnloadOnShutdown = "dns-policy-unload-on-shutdown"
-
 	// ToFQDNsMinTTL is the minimum time, in seconds, to use DNS data for toFQDNs policies.
 	ToFQDNsMinTTL = "tofqdns-min-ttl"
 
@@ -375,22 +372,9 @@ const (
 	// previously active connections with expired DNS lookups are still considered alive
 	ToFQDNsIdleConnectionGracePeriod = "tofqdns-idle-connection-grace-period"
 
-	// ToFQDNsPreCache is a path to a file with DNS cache data to insert into the
-	// global cache on startup.
-	// The file is not re-read after agent start.
-	ToFQDNsPreCache = "tofqdns-pre-cache"
-
 	// DNSProxyConcurrencyLimit limits parallel processing of DNS messages in
 	// DNS proxy at any given point in time.
 	DNSProxyConcurrencyLimit = "dnsproxy-concurrency-limit"
-
-	// DNSProxyLockCount is the array size containing mutexes which protect
-	// against parallel handling of DNS response IPs.
-	DNSProxyLockCount = "dnsproxy-lock-count"
-
-	// DNSProxyLockTimeout is timeout when acquiring the locks controlled by
-	// DNSProxyLockCount.
-	DNSProxyLockTimeout = "dnsproxy-lock-timeout"
 
 	// DNSProxySocketLingerTimeout defines how many seconds we wait for the connection
 	// between the DNS proxy and the upstream server to be closed.
@@ -642,9 +626,6 @@ const (
 	// FQDNProxyDenyWithRefused is the response code for Domain refused. It is
 	// the default for denied DNS requests.
 	FQDNProxyDenyWithRefused = "refused"
-
-	// FQDNProxyResponseMaxDelay is the maximum time the proxy holds back a response
-	FQDNProxyResponseMaxDelay = "tofqdns-proxy-response-max-delay"
 
 	// FQDNRegexCompileLRUSize is the size of the FQDN regex compilation LRU.
 	// Useful for heavy but repeated FQDN MatchName or MatchPattern use.
@@ -1447,10 +1428,6 @@ type DaemonConfig struct {
 	TracePayloadlenOverlay int
 	ToFQDNsMinTTL          int
 
-	// DNSPolicyUnloadOnShutdown defines whether DNS policy rules should be unloaded on
-	// graceful shutdown.
-	DNSPolicyUnloadOnShutdown bool
-
 	// ToFQDNsProxyPort is the user-configured global, shared, DNS listen port used
 	// by the DNS Proxy. Both UDP and TCP are handled on the same port. When it
 	// is 0 a random port will be assigned, and can be obtained from
@@ -1473,17 +1450,9 @@ type DaemonConfig struct {
 	// FQDNRejectResponse is the dns-proxy response for invalid dns-proxy request
 	FQDNRejectResponse string
 
-	// FQDNProxyResponseMaxDelay The maximum time the DNS proxy holds an allowed
-	// DNS response before sending it along. Responses are sent as soon as the
-	// datapath is updated with the new IP information.
-	FQDNProxyResponseMaxDelay time.Duration
-
 	// FQDNRegexCompileLRUSize is the size of the FQDN regex compilation LRU.
 	// Useful for heavy but repeated FQDN MatchName or MatchPattern use.
 	FQDNRegexCompileLRUSize uint
-
-	// Path to a file with DNS cache data to preload on startup
-	ToFQDNsPreCache string
 
 	// DNSProxyConcurrencyLimit limits parallel processing of DNS messages in
 	// DNS proxy at any given point in time.
@@ -1491,14 +1460,6 @@ type DaemonConfig struct {
 
 	// DNSProxyEnableTransparentMode enables transparent mode for the DNS proxy.
 	DNSProxyEnableTransparentMode bool
-
-	// DNSProxyLockCount is the array size containing mutexes which protect
-	// against parallel handling of DNS response names.
-	DNSProxyLockCount int
-
-	// DNSProxyLockTimeout is timeout when acquiring the locks controlled by
-	// DNSProxyLockCount.
-	DNSProxyLockTimeout time.Duration
 
 	// DNSProxySocketLingerTimeout defines how many seconds we wait for the connection
 	// between the DNS proxy and the upstream server to be closed.
@@ -2649,7 +2610,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableIdentityMark = vp.GetBool(EnableIdentityMark)
 
 	// toFQDNs options
-	c.DNSPolicyUnloadOnShutdown = vp.GetBool(DNSPolicyUnloadOnShutdown)
 	c.FQDNRegexCompileLRUSize = vp.GetUint(FQDNRegexCompileLRUSize)
 	c.ToFQDNsMaxIPsPerHost = vp.GetInt(ToFQDNsMaxIPsPerHost)
 	if maxZombies := vp.GetInt(ToFQDNsMaxDeferredConnectionDeletes); maxZombies >= 0 {
@@ -2665,13 +2625,9 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 		c.ToFQDNsMinTTL = defaults.ToFQDNsMinTTL
 	}
 	c.ToFQDNsProxyPort = vp.GetInt(ToFQDNsProxyPort)
-	c.ToFQDNsPreCache = vp.GetString(ToFQDNsPreCache)
 	c.ToFQDNsIdleConnectionGracePeriod = vp.GetDuration(ToFQDNsIdleConnectionGracePeriod)
-	c.FQDNProxyResponseMaxDelay = vp.GetDuration(FQDNProxyResponseMaxDelay)
 	c.DNSProxyConcurrencyLimit = vp.GetInt(DNSProxyConcurrencyLimit)
 	c.DNSProxyEnableTransparentMode = vp.GetBool(DNSProxyEnableTransparentMode)
-	c.DNSProxyLockCount = vp.GetInt(DNSProxyLockCount)
-	c.DNSProxyLockTimeout = vp.GetDuration(DNSProxyLockTimeout)
 	c.DNSProxySocketLingerTimeout = vp.GetInt(DNSProxySocketLingerTimeout)
 	c.FQDNRejectResponse = vp.GetString(FQDNRejectResponseCode)
 

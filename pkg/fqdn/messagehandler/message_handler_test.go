@@ -19,13 +19,13 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dns"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/node"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/policy/types"
@@ -34,6 +34,46 @@ import (
 	testpolicy "github.com/cilium/cilium/pkg/testutils/policy"
 	"github.com/cilium/cilium/pkg/time"
 )
+
+type deadlineNameManager struct {
+	namemanager.NameManager
+	deadline time.Time
+}
+
+func (*deadlineNameManager) LockName(string)   {}
+func (*deadlineNameManager) UnlockName(string) {}
+
+func (m *deadlineNameManager) UpdateGenerateDNS(ctx context.Context, _ time.Time, _ string, _ *fqdn.DNSIPRecords, _ ...*fqdn.DNSCache) <-chan error {
+	m.deadline, _ = ctx.Deadline()
+	done := make(chan error)
+	close(done)
+	return done
+}
+
+func TestResponseDeadlineConfig(t *testing.T) {
+	for _, delay := range []time.Duration{100 * time.Millisecond, 2 * time.Second} {
+		t.Run(delay.String(), func(t *testing.T) {
+			cfg := fqdnconfig.DefaultConfig
+			cfg.FQDNProxyResponseMaxDelay = delay
+			manager := &deadlineNameManager{}
+			handler := NewDNSMessageHandler(DNSMessageHandlerParams{
+				Logger:      hivetest.Logger(t),
+				Config:      cfg,
+				NameManager: manager,
+			})
+			lookupTime := time.Now()
+			ips := []netip.Addr{netip.MustParseAddr("192.0.2.1")}
+			ep := &endpoint.Endpoint{DNSHistory: fqdn.NewDNSCache(0)}
+			ep.DNSHistory.Update(lookupTime, "cilium.io.", ips, 60)
+
+			before := time.Now()
+			handler.UpdateOnDNSMsg(lookupTime, ep, "cilium.io.", ips, 60, &dnsproxy.ProxyRequestContext{})
+			after := time.Now()
+			require.False(t, manager.deadline.Before(before.Add(delay)))
+			require.False(t, manager.deadline.After(after.Add(delay)))
+		})
+	}
+}
 
 func BenchmarkNotifyOnDNSMsg(b *testing.B) {
 	var (
@@ -90,21 +130,20 @@ func BenchmarkNotifyOnDNSMsg(b *testing.B) {
 	ipc := &mockipc.MockIPCache{}
 	nm := namemanager.New(namemanager.ManagerParams{
 		Config: namemanager.NameManagerConfig{
-			MinTTL:            1,
-			DNSProxyLockCount: defaults.DNSProxyLockCount,
-			StateDir:          defaults.StateDir,
+			MinTTL:   1,
+			StateDir: defaults.StateDir,
 		},
+		FQDNConfig: fqdnconfig.DefaultConfig,
 		IPCache:    ipc,
 		PolicyRepo: policyRepo,
 		Logger:     logger,
 	})
 	policyRepo.GetSelectorCache().SetLocalIdentityNotifier(nm)
-	option.Config.DNSProxyLockTimeout = defaults.DNSProxyLockTimeout
-	option.Config.FQDNProxyResponseMaxDelay = defaults.FQDNProxyResponseMaxDelay
 
 	handler := NewDNSMessageHandler(
 		DNSMessageHandlerParams{
 			Logger:            logger,
+			Config:            fqdnconfig.DefaultConfig,
 			NameManager:       nm,
 			ProxyAccessLogger: accesslog.NewProxyAccessLogger(logger, accesslog.ProxyAccessLoggerConfig{}, &noopNotifier{}, &dummyInfoRegistry{}, node.NewTestLocalNodeStore(node.LocalNode{})),
 		})

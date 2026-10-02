@@ -627,36 +627,18 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	flags.Int(option.ToFQDNsMaxIPsPerHost, defaults.ToFQDNsMaxIPsPerHost, "Maximum number of IPs to maintain per FQDN name for each endpoint")
 	option.BindEnv(vp, option.ToFQDNsMaxIPsPerHost)
 
-	flags.Bool(option.DNSPolicyUnloadOnShutdown, false, "Unload DNS policy rules on graceful shutdown")
-	option.BindEnv(vp, option.DNSPolicyUnloadOnShutdown)
-
 	flags.Int(option.ToFQDNsMaxDeferredConnectionDeletes, defaults.ToFQDNsMaxDeferredConnectionDeletes, "Maximum number of IPs to retain for expired DNS lookups with still-active connections")
 	option.BindEnv(vp, option.ToFQDNsMaxDeferredConnectionDeletes)
 
 	flags.Duration(option.ToFQDNsIdleConnectionGracePeriod, defaults.ToFQDNsIdleConnectionGracePeriod, "Time during which idle but previously active connections with expired DNS lookups are still considered alive (default 0s)")
 	option.BindEnv(vp, option.ToFQDNsIdleConnectionGracePeriod)
 
-	flags.Duration(option.FQDNProxyResponseMaxDelay, defaults.FQDNProxyResponseMaxDelay, "The maximum time the DNS proxy holds an allowed DNS response before sending it along. Responses are sent as soon as the datapath is updated with the new IP information.")
-	option.BindEnv(vp, option.FQDNProxyResponseMaxDelay)
-
 	flags.Uint(option.FQDNRegexCompileLRUSize, defaults.FQDNRegexCompileLRUSize, "Size of the FQDN regex compilation LRU. Useful for heavy but repeated DNS L7 rules with MatchName or MatchPattern")
 	flags.MarkHidden(option.FQDNRegexCompileLRUSize)
 	option.BindEnv(vp, option.FQDNRegexCompileLRUSize)
 
-	flags.String(option.ToFQDNsPreCache, defaults.ToFQDNsPreCache, "DNS cache data at this path is preloaded on agent startup")
-	flags.MarkDeprecated(option.ToFQDNsPreCache, "This option is obsolete and will be removed in v1.21")
-	option.BindEnv(vp, option.ToFQDNsPreCache)
-
 	flags.Int(option.DNSProxyConcurrencyLimit, 0, "Limit concurrency of DNS message processing")
 	option.BindEnv(vp, option.DNSProxyConcurrencyLimit)
-
-	flags.Int(option.DNSProxyLockCount, defaults.DNSProxyLockCount, "Array size containing mutexes which protect against parallel handling of DNS response names. Preferably use prime numbers")
-	flags.MarkHidden(option.DNSProxyLockCount)
-	option.BindEnv(vp, option.DNSProxyLockCount)
-
-	flags.Duration(option.DNSProxyLockTimeout, defaults.DNSProxyLockTimeout, fmt.Sprintf("Timeout when acquiring the locks controlled by --%s", option.DNSProxyLockCount))
-	flags.MarkHidden(option.DNSProxyLockTimeout)
-	option.BindEnv(vp, option.DNSProxyLockTimeout)
 
 	flags.Int(option.DNSProxySocketLingerTimeout, defaults.DNSProxySocketLingerTimeout, "Timeout (in seconds) when closing the connection between the DNS proxy and the upstream server. "+
 		"If set to 0, the connection is closed immediately (with TCP RST). If set to -1, the connection is closed asynchronously in the background")
@@ -1175,6 +1157,7 @@ type daemonParams struct {
 	// Ensures that the legacy daemon config initialization is executed
 	legacy.DaemonConfigInitialization
 	DaemonConfig *option.DaemonConfig
+	FQDNConfig   fqdnconfig.Config
 
 	Logger    *slog.Logger
 	Lifecycle cell.Lifecycle

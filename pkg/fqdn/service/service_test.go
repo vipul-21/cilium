@@ -171,11 +171,11 @@ func TestFQDNDataServer(t *testing.T) {
 						return namemanager.New(namemanager.ManagerParams{
 							Logger: logger,
 							Config: namemanager.NameManagerConfig{
-								MinTTL:            1,
-								DNSProxyLockCount: defaults.DNSProxyLockCount,
-								StateDir:          defaults.StateDir,
+								MinTTL:   1,
+								StateDir: defaults.StateDir,
 							},
-							IPCache: ipc,
+							FQDNConfig: fqdnconfig.DefaultConfig,
+							IPCache:    ipc,
 						})
 					},
 					func(lc cell.Lifecycle, logger *slog.Logger) messagehandler.DNSMessageHandler {
@@ -183,6 +183,7 @@ func TestFQDNDataServer(t *testing.T) {
 							messagehandler.DNSMessageHandlerParams{
 								Lifecycle:         lc,
 								Logger:            logger,
+								Config:            fqdnconfig.DefaultConfig,
 								NameManager:       nil,
 								ProxyAccessLogger: newTestProxyAccessLogger(logger),
 							})
@@ -285,11 +286,11 @@ func setupServer(t *testing.T, port int, enableL7Proxy bool, enableStandaloneDNS
 					return namemanager.New(namemanager.ManagerParams{
 						Logger: logger,
 						Config: namemanager.NameManagerConfig{
-							MinTTL:            1,
-							DNSProxyLockCount: defaults.DNSProxyLockCount,
-							StateDir:          defaults.StateDir,
+							MinTTL:   1,
+							StateDir: defaults.StateDir,
 						},
-						IPCache: ipc,
+						FQDNConfig: fqdnconfig.DefaultConfig,
+						IPCache:    ipc,
 					})
 				},
 				func(lc cell.Lifecycle, logger *slog.Logger, nm namemanager.NameManager) messagehandler.DNSMessageHandler {
@@ -297,6 +298,7 @@ func setupServer(t *testing.T, port int, enableL7Proxy bool, enableStandaloneDNS
 						messagehandler.DNSMessageHandlerParams{
 							Lifecycle:         lc,
 							Logger:            logger,
+							Config:            fqdnconfig.DefaultConfig,
 							NameManager:       nm,
 							ProxyAccessLogger: newTestProxyAccessLogger(logger),
 						})

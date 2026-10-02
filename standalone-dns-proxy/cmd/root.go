@@ -63,7 +63,7 @@ var (
 		cell.Provide(func() *option.DaemonConfig {
 			return option.Config
 		}),
-		fqdnconfig.Cell,
+		fqdnconfig.StandaloneCell,
 		cell.Provide(
 			NewStandaloneDNSProxy,
 			NewReadinessStatusProvider,
