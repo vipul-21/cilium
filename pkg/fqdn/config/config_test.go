@@ -24,6 +24,7 @@ func TestConfig(t *testing.T) {
 	overridden.ToFQDNsEnableDNSCompression = false
 	overridden.DNSMaxIPsPerRestoredRule = 23
 	overridden.DNSProxyConcurrencyProcessingGracePeriod = 250 * time.Millisecond
+	overridden.ToFQDNsPreAllocate = false
 
 	for _, tt := range []struct {
 		name      string
@@ -45,6 +46,7 @@ func TestConfig(t *testing.T) {
 					"--tofqdns-enable-dns-compression=false",
 					"--dns-max-ips-per-restored-rule=23",
 					"--dnsproxy-concurrency-processing-grace-period=250ms",
+					"--tofqdns-preallocate-identities=false",
 				}))
 			},
 			want: overridden,
@@ -57,6 +59,7 @@ func TestConfig(t *testing.T) {
 				t.Setenv("CILIUM_TOFQDNS_ENABLE_DNS_COMPRESSION", "false")
 				t.Setenv("CILIUM_DNS_MAX_IPS_PER_RESTORED_RULE", "23")
 				t.Setenv("CILIUM_DNSPROXY_CONCURRENCY_PROCESSING_GRACE_PERIOD", "250ms")
+				t.Setenv("CILIUM_TOFQDNS_PREALLOCATE_IDENTITIES", "false")
 			},
 			want: overridden,
 		},
@@ -70,6 +73,7 @@ standalone-dns-proxy-server-port: 11095
 tofqdns-enable-dns-compression: false
 dns-max-ips-per-restored-rule: 23
 dnsproxy-concurrency-processing-grace-period: 250ms
+tofqdns-preallocate-identities: false
 `)))
 			},
 			want: overridden,

@@ -9,13 +9,13 @@ import (
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
-	"github.com/spf13/pflag"
 
 	policyRestAPI "github.com/cilium/cilium/api/v1/server/restapi/policy"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/fqdn"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/option"
@@ -29,18 +29,13 @@ var Cell = cell.Module(
 	"namemanager",
 	"maintains DNS mappings to implement toFQDN policy",
 
-	// Cannot just yet be a proper cell.Config, since there's places which
-	// access the MinTTL without access to a hive. In addition, the state dir is
-	// a shared config.
-	cell.Config(defaultConfig),
-	cell.ProvidePrivate(func(dc *option.DaemonConfig, lc NameManagerLocalConfig) NameManagerConfig {
+	cell.ProvidePrivate(func(dc *option.DaemonConfig) NameManagerConfig {
 		return NameManagerConfig{
-			NameManagerLocalConfig: lc,
-			MinTTL:                 dc.ToFQDNsMinTTL,
-			DNSProxyLockCount:      dc.DNSProxyLockCount,
-			StateDir:               dc.StateDir,
-			EnableIPv4:             dc.EnableIPv4,
-			EnableIPv6:             dc.EnableIPv6,
+			MinTTL:            dc.ToFQDNsMinTTL,
+			DNSProxyLockCount: dc.DNSProxyLockCount,
+			StateDir:          dc.StateDir,
+			EnableIPv4:        dc.EnableIPv4,
+			EnableIPv6:        dc.EnableIPv6,
 		}
 	}),
 	cell.ProvidePrivate(adaptors),
@@ -52,8 +47,6 @@ var Cell = cell.Module(
 )
 
 type NameManagerConfig struct {
-	NameManagerLocalConfig
-
 	// MinTTL is the minimum TTL value that a cache entry can have.
 	MinTTL int
 
@@ -66,10 +59,6 @@ type NameManagerConfig struct {
 	EnableIPv4, EnableIPv6 bool
 }
 
-type NameManagerLocalConfig struct {
-	ToFQDNsPreAllocate bool `mapstructure:"tofqdns-preallocate-identities"`
-}
-
 type ManagerParams struct {
 	cell.In
 
@@ -78,6 +67,7 @@ type ManagerParams struct {
 	PolicyRepo      policy.PolicyRepository
 	Logger          *slog.Logger
 	Config          NameManagerConfig
+	FQDNConfig      fqdnconfig.Config
 	IPCache         ipc
 	EPMgr           endpoints
 	RestorerPromise promise.Promise[endpointstate.Restorer]
@@ -99,14 +89,6 @@ type ipc interface {
 type endpoints interface {
 	Lookup(id string) (*endpoint.Endpoint, error)
 	GetEndpoints() []*endpoint.Endpoint
-}
-
-var defaultConfig = NameManagerLocalConfig{
-	ToFQDNsPreAllocate: true,
-}
-
-func (def NameManagerLocalConfig) Flags(flags *pflag.FlagSet) {
-	flags.Bool("tofqdns-preallocate-identities", def.ToFQDNsPreAllocate, "Preallocate identities for ToFQDN selectors. This reduces proxied DNS response latency. Disable if you have many ToFQDN selectors.")
 }
 
 // Only exists such that we have constructor which returns the interface type.

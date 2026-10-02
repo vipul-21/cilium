@@ -16,6 +16,7 @@ const (
 	DNSMaxIPsPerRestoredRule                 = "dns-max-ips-per-restored-rule"
 	ToFQDNsEnableDNSCompression              = "tofqdns-enable-dns-compression"
 	DNSProxyConcurrencyProcessingGracePeriod = "dnsproxy-concurrency-processing-grace-period"
+	ToFQDNsPreAllocate                       = "tofqdns-preallocate-identities"
 )
 
 type Config struct {
@@ -24,6 +25,7 @@ type Config struct {
 	ToFQDNsEnableDNSCompression              bool
 	DNSMaxIPsPerRestoredRule                 int
 	DNSProxyConcurrencyProcessingGracePeriod time.Duration
+	ToFQDNsPreAllocate                       bool `mapstructure:"tofqdns-preallocate-identities"`
 }
 
 var DefaultConfig = Config{
@@ -32,6 +34,7 @@ var DefaultConfig = Config{
 	ToFQDNsEnableDNSCompression:              true,
 	DNSMaxIPsPerRestoredRule:                 1000,
 	DNSProxyConcurrencyProcessingGracePeriod: 0,
+	ToFQDNsPreAllocate:                       true,
 }
 
 func (def Config) Flags(flags *pflag.FlagSet) {
@@ -40,4 +43,5 @@ func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.Bool(ToFQDNsEnableDNSCompression, def.ToFQDNsEnableDNSCompression, "Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present")
 	flags.Int(DNSMaxIPsPerRestoredRule, def.DNSMaxIPsPerRestoredRule, "Maximum number of IPs to maintain for each restored DNS rule")
 	flags.Duration(DNSProxyConcurrencyProcessingGracePeriod, def.DNSProxyConcurrencyProcessingGracePeriod, "Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing")
+	flags.Bool(ToFQDNsPreAllocate, def.ToFQDNsPreAllocate, "Preallocate identities for ToFQDN selectors. This reduces proxied DNS response latency. Disable if you have many ToFQDN selectors.")
 }

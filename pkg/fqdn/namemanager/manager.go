@@ -120,7 +120,7 @@ func New(params ManagerParams) *manager {
 
 		// Start the asynchronous prefix allocator
 		// (optional for tests)
-		if params.Allocator != nil && params.Config.ToFQDNsPreAllocate {
+		if params.Allocator != nil && params.FQDNConfig.ToFQDNsPreAllocate {
 			n.selectorChanges = make(chan selectorChange, 2048)
 			params.JobGroup.Add(job.Observer(
 				"preallocate",
