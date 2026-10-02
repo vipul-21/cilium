@@ -4,6 +4,7 @@
 package option
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/netip"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/defaults"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/util"
 )
@@ -1204,13 +1206,22 @@ func TestDaemonConfig_validateContainerIPLocalReservedPorts(t *testing.T) {
 }
 
 func TestDaemonConfig_StoreInFile(t *testing.T) {
+	t.Chdir(t.TempDir())
 	logger := hivetest.Logger(t)
 	// Set an IntOption so that they are also stored in file
 	assert.False(t, Config.Opts.IsEnabled("unit-test-key-only")) // make sure not used
 	Config.Opts.SetBool("unit-test-key-only", true)
 
-	err := Config.StoreInFile(logger, ".")
-	assert.NoError(t, err)
+	fqdnConfig := fqdnconfig.DefaultConfig
+	fqdnConfig.DNSMaxIPsPerRestoredRule = 42
+	err := Config.StoreInFile(logger, ".", fqdnConfig)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(backupFileNames[0])
+	require.NoError(t, err)
+	var stored fqdnconfig.Config
+	require.NoError(t, json.Unmarshal(data, &stored))
+	require.Equal(t, fqdnConfig, stored)
 
 	err = Config.ValidateUnchanged()
 	assert.NoError(t, err)

@@ -31,6 +31,7 @@ import (
 	endpoint "github.com/cilium/cilium/pkg/endpoint/types"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/eventqueue"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/logging"
@@ -71,6 +72,7 @@ type configModifyApiHandlerParams struct {
 	legacy.DaemonInitialization
 
 	DaemonConfig    *option.DaemonConfig
+	FQDNConfig      fqdnconfig.Config
 	DB              *statedb.DB
 	Devices         statedb.Table[*datapathTables.Device]
 	Clientset       k8sClient.Clientset
@@ -99,6 +101,7 @@ func newConfigModifyApiHandler(params configModifyApiHandlerParams) configModify
 		GetConfigHandler: &getConfigHandler{
 			logger:          params.Logger,
 			daemonConfig:    params.DaemonConfig,
+			fqdnConfig:      params.FQDNConfig,
 			db:              params.DB,
 			devices:         params.Devices,
 			clientset:       params.Clientset,
@@ -358,6 +361,7 @@ type getConfigHandler struct {
 	logger *slog.Logger
 
 	daemonConfig    *option.DaemonConfig
+	fqdnConfig      fqdnconfig.Config
 	db              *statedb.DB
 	devices         statedb.Table[*datapathTables.Device]
 	clientset       k8sClient.Clientset
@@ -372,25 +376,32 @@ type getConfigHandler struct {
 	localNodeStore  *node.LocalNodeStore
 }
 
+func (h *getConfigHandler) getConfigMap() map[string]any {
+	m := make(map[string]any)
+
+	// Collect config ignoring the mutable options.
+	for _, cfg := range []any{h.daemonConfig, &h.fqdnConfig} {
+		e := reflect.ValueOf(cfg).Elem()
+		for i := range e.NumField() {
+			if e.Field(i).Kind() != reflect.Func {
+				field := e.Type().Field(i)
+				// Only consider exported fields and ignore the mutable options.
+				if field.IsExported() && field.Name != "Opts" {
+					m[field.Name] = e.Field(i).Interface()
+				}
+			}
+		}
+	}
+	return m
+}
+
 func (h *getConfigHandler) Handle(params daemonapi.GetConfigParams) middleware.Responder {
 	h.logger.Debug(
 		"GET /config request",
 		logfields.Params, params,
 	)
 
-	m := make(map[string]any)
-
-	// Collect config ignoring the mutable options.
-	e := reflect.ValueOf(option.Config).Elem()
-	for i := range e.NumField() {
-		if e.Field(i).Kind() != reflect.Func {
-			field := e.Type().Field(i)
-			// Only consider exported fields and ignore the mutable options.
-			if field.IsExported() && field.Name != "Opts" {
-				m[e.Type().Field(i).Name] = e.Field(i).Interface()
-			}
-		}
-	}
+	m := h.getConfigMap()
 
 	// Manually add fields that are behind accessors.
 	devs, _ := datapathTables.SelectedDevices(h.devices, h.db.ReadTxn())

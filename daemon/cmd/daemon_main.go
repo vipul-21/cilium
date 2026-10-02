@@ -37,6 +37,7 @@ import (
 	"github.com/cilium/cilium/pkg/envoy"
 	util "github.com/cilium/cilium/pkg/envoy/util"
 	"github.com/cilium/cilium/pkg/flowdebug"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/identity"
 	identitycell "github.com/cilium/cilium/pkg/identity/cache/cell"
@@ -1155,6 +1156,7 @@ type daemonConfigParams struct {
 
 	CfgResolver  promise.Resolver[*option.DaemonConfig]
 	DaemonConfig *option.DaemonConfig
+	FQDNConfig   fqdnconfig.Config
 
 	Logger    *slog.Logger
 	Lifecycle cell.Lifecycle
@@ -1212,7 +1214,7 @@ func daemonConfigInitialization(params daemonConfigParams) legacy.DaemonConfigIn
 
 			if !option.Config.DryMode {
 				// Store config in file before resolving the DaemonConfig promise.
-				if err := option.Config.StoreInFile(params.Logger, option.Config.StateDir); err != nil {
+				if err := option.Config.StoreInFile(params.Logger, option.Config.StateDir, params.FQDNConfig); err != nil {
 					params.Logger.Error("Unable to store Cilium's configuration", logfields.Error, err)
 					params.CfgResolver.Reject(err)
 					return err
