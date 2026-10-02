@@ -369,10 +369,6 @@ const (
 	// previously active connections with expired DNS lookups are still considered alive
 	ToFQDNsIdleConnectionGracePeriod = "tofqdns-idle-connection-grace-period"
 
-	// DNSProxyConcurrencyLimit limits parallel processing of DNS messages in
-	// DNS proxy at any given point in time.
-	DNSProxyConcurrencyLimit = "dnsproxy-concurrency-limit"
-
 	// DNSProxySocketLingerTimeout defines how many seconds we wait for the connection
 	// between the DNS proxy and the upstream server to be closed.
 	DNSProxySocketLingerTimeout = "dnsproxy-socket-linger-timeout"
@@ -1418,10 +1414,6 @@ type DaemonConfig struct {
 	// previously active connections with expired DNS lookups are
 	// still considered alive
 	ToFQDNsIdleConnectionGracePeriod time.Duration
-
-	// DNSProxyConcurrencyLimit limits parallel processing of DNS messages in
-	// DNS proxy at any given point in time.
-	DNSProxyConcurrencyLimit int
 
 	// DNSProxyEnableTransparentMode enables transparent mode for the DNS proxy.
 	DNSProxyEnableTransparentMode bool
@@ -2589,7 +2581,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 		c.ToFQDNsMinTTL = defaults.ToFQDNsMinTTL
 	}
 	c.ToFQDNsIdleConnectionGracePeriod = vp.GetDuration(ToFQDNsIdleConnectionGracePeriod)
-	c.DNSProxyConcurrencyLimit = vp.GetInt(DNSProxyConcurrencyLimit)
 	c.DNSProxyEnableTransparentMode = vp.GetBool(DNSProxyEnableTransparentMode)
 	c.DNSProxySocketLingerTimeout = vp.GetInt(DNSProxySocketLingerTimeout)
 

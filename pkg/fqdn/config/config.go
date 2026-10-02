@@ -27,6 +27,7 @@ const (
 	ToFQDNsProxyPort                         = "tofqdns-proxy-port"
 	FQDNRejectResponseCode                   = "tofqdns-dns-reject-response-code"
 	FQDNRegexCompileLRUSize                  = "fqdn-regex-compile-lru-size"
+	DNSProxyConcurrencyLimit                 = "dnsproxy-concurrency-limit"
 
 	FQDNProxyDenyWithNameError = "nameError"
 	FQDNProxyDenyWithRefused   = "refused"
@@ -49,6 +50,7 @@ type Config struct {
 	ToFQDNsProxyPort                         int
 	FQDNRejectResponse                       string `mapstructure:"tofqdns-dns-reject-response-code"`
 	FQDNRegexCompileLRUSize                  uint
+	DNSProxyConcurrencyLimit                 int
 }
 
 var DefaultConfig = Config{
@@ -96,4 +98,5 @@ func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.String(FQDNRejectResponseCode, def.FQDNRejectResponse, fmt.Sprintf("DNS response code for rejecting DNS requests, available options are '%v'", FQDNRejectOptions))
 	flags.Uint(FQDNRegexCompileLRUSize, def.FQDNRegexCompileLRUSize, "Size of the FQDN regex compilation LRU. Useful for heavy but repeated DNS L7 rules with MatchName or MatchPattern")
 	flags.MarkHidden(FQDNRegexCompileLRUSize)
+	flags.Int(DNSProxyConcurrencyLimit, def.DNSProxyConcurrencyLimit, "Limit concurrency of DNS message processing")
 }

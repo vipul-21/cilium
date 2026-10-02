@@ -22,10 +22,10 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/spf13/pflag"
 
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	metricpkg "github.com/cilium/cilium/pkg/metrics/metric"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 )
 
@@ -56,7 +56,8 @@ type RegistryParams struct {
 	AutoMetrics []metricpkg.WithMetadata `group:"hive-metrics"`
 	Config      RegistryConfig
 
-	DaemonConfig *option.DaemonConfig
+	// Non-agent binaries also use the registry, without an FQDN subsystem.
+	FQDNConfig fqdnconfig.Config `optional:"true"`
 }
 
 // Registry is a cell around a prometheus registry. This registry starts an HTTP server as part of its lifecycle
@@ -197,7 +198,7 @@ func (r *Registry) registerMetrics() {
 	// This is a bodge for a very specific feature, inherited from the old `Daemon.additionalMetrics`.
 	// We should really find a more generic way to handle such cases.
 	metricFlags := r.params.Config.Metrics
-	if r.params.DaemonConfig.DNSProxyConcurrencyLimit > 0 {
+	if r.params.FQDNConfig.DNSProxyConcurrencyLimit > 0 {
 		metricFlags = append(metricFlags, "+"+Namespace+"_"+SubsystemFQDN+"_semaphore_rejected_total")
 	}
 

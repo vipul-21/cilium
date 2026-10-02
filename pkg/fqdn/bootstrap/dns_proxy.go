@@ -54,7 +54,7 @@ func newDNSProxy(params dnsProxyParams) (proxy.DNSProxier, error) {
 		IPv6:                   option.Config.EnableIPv6,
 		EnableDNSCompression:   params.FQDNConfig.ToFQDNsEnableDNSCompression,
 		MaxRestoreDNSIPs:       params.FQDNConfig.DNSMaxIPsPerRestoredRule,
-		ConcurrencyLimit:       option.Config.DNSProxyConcurrencyLimit,
+		ConcurrencyLimit:       params.FQDNConfig.DNSProxyConcurrencyLimit,
 		ConcurrencyGracePeriod: params.FQDNConfig.DNSProxyConcurrencyProcessingGracePeriod,
 		RejectReply:            params.FQDNConfig.FQDNRejectResponse,
 	}

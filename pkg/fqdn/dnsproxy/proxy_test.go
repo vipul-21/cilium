@@ -67,6 +67,41 @@ type DNSProxyTestSuite struct {
 	logger       *slog.Logger
 }
 
+func TestConcurrencyLimitConfig(t *testing.T) {
+	for _, limit := range []int{-1, 0, 1, 3} {
+		for _, grace := range []time.Duration{0, time.Millisecond} {
+			t.Run(fmt.Sprintf("%d/%s", limit, grace), func(t *testing.T) {
+				proxy := NewDNSProxy(DNSProxyConfig{
+					Logger:                 hivetest.Logger(t),
+					ConcurrencyLimit:       limit,
+					ConcurrencyGracePeriod: grace,
+				}, nil, nil)
+				if limit <= 0 {
+					require.Nil(t, proxy.ConcurrencyLimit)
+					return
+				}
+				require.True(t, proxy.ConcurrencyLimit.TryAcquire(int64(limit)))
+				ctx, cancel := context.WithTimeout(t.Context(), grace)
+				defer cancel()
+				err := proxy.enforceConcurrencyLimit(ctx)
+				if grace == 0 {
+					var rejected ErrFailedAcquireSemaphore
+					require.ErrorAs(t, err, &rejected)
+					require.Equal(t, limit, rejected.parallel)
+				} else {
+					var timedOut ErrTimedOutAcquireSemaphore
+					require.ErrorAs(t, err, &timedOut)
+					require.Equal(t, limit, timedOut.parallel)
+					require.Equal(t, grace, timedOut.gracePeriod)
+				}
+				proxy.ConcurrencyLimit.Release(int64(limit))
+				require.NoError(t, proxy.enforceConcurrencyLimit(t.Context()))
+				proxy.ConcurrencyLimit.Release(1)
+			})
+		}
+	}
+}
+
 func TestRejectReplyConfig(t *testing.T) {
 	for _, tt := range []struct {
 		response string

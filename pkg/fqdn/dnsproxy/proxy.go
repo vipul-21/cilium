@@ -1153,7 +1153,7 @@ func (p *DNSProxy) enforceConcurrencyLimit(ctx context.Context) error {
 		// immediately give up.
 		if !p.ConcurrencyLimit.TryAcquire(1) {
 			return ErrFailedAcquireSemaphore{
-				parallel: option.Config.DNSProxyConcurrencyLimit,
+				parallel: p.cfg.ConcurrencyLimit,
 			}
 		}
 	} else if err := p.ConcurrencyLimit.Acquire(ctx, 1); err != nil && errors.Is(err, context.DeadlineExceeded) {
@@ -1162,7 +1162,7 @@ func (p *DNSProxy) enforceConcurrencyLimit(ctx context.Context) error {
 		// treated the same as context.DeadlineExceeded.
 		return ErrTimedOutAcquireSemaphore{
 			ErrFailedAcquireSemaphore: ErrFailedAcquireSemaphore{
-				parallel: option.Config.DNSProxyConcurrencyLimit,
+				parallel: p.cfg.ConcurrencyLimit,
 			},
 			gracePeriod: p.ConcurrencyGracePeriod,
 		}

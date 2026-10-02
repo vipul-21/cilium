@@ -33,6 +33,7 @@ func TestConfig(t *testing.T) {
 	overridden.ToFQDNsProxyPort = 10053
 	overridden.FQDNRejectResponse = config.FQDNProxyDenyWithNameError
 	overridden.FQDNRegexCompileLRUSize = 2048
+	overridden.DNSProxyConcurrencyLimit = 7
 
 	for _, tt := range []struct {
 		name      string
@@ -63,6 +64,7 @@ func TestConfig(t *testing.T) {
 					"--tofqdns-proxy-port=10053",
 					"--tofqdns-dns-reject-response-code=nameError",
 					"--fqdn-regex-compile-lru-size=2048",
+					"--dnsproxy-concurrency-limit=7",
 				}))
 			},
 			want: overridden,
@@ -84,6 +86,7 @@ func TestConfig(t *testing.T) {
 				t.Setenv("CILIUM_TOFQDNS_PROXY_PORT", "10053")
 				t.Setenv("CILIUM_TOFQDNS_DNS_REJECT_RESPONSE_CODE", "nameError")
 				t.Setenv("CILIUM_FQDN_REGEX_COMPILE_LRU_SIZE", "2048")
+				t.Setenv("CILIUM_DNSPROXY_CONCURRENCY_LIMIT", "7")
 			},
 			want: overridden,
 		},
@@ -106,6 +109,7 @@ dns-policy-unload-on-shutdown: true
 tofqdns-proxy-port: 10053
 tofqdns-dns-reject-response-code: nameError
 fqdn-regex-compile-lru-size: 2048
+dnsproxy-concurrency-limit: 7
 `)))
 			},
 			want: overridden,
