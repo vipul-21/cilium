@@ -354,21 +354,6 @@ const (
 	// CMDRef is the path to cmdref output directory
 	CMDRef = "cmdref"
 
-	// ToFQDNsMinTTL is the minimum time, in seconds, to use DNS data for toFQDNs policies.
-	ToFQDNsMinTTL = "tofqdns-min-ttl"
-
-	// ToFQDNsMaxIPsPerHost defines the maximum number of IPs to maintain
-	// for each FQDN name in an endpoint's FQDN cache
-	ToFQDNsMaxIPsPerHost = "tofqdns-endpoint-max-ip-per-hostname"
-
-	// ToFQDNsMaxDeferredConnectionDeletes defines the maximum number of IPs to
-	// retain for expired DNS lookups with still-active connections"
-	ToFQDNsMaxDeferredConnectionDeletes = "tofqdns-max-deferred-connection-deletes"
-
-	// ToFQDNsIdleConnectionGracePeriod defines the connection idle time during which
-	// previously active connections with expired DNS lookups are still considered alive
-	ToFQDNsIdleConnectionGracePeriod = "tofqdns-idle-connection-grace-period"
-
 	// DNSProxyInsecureSkipTransparentModeCheck is a hidden flag that allows users
 	// to disable transparent mode even if IPSec is enabled
 	DNSProxyInsecureSkipTransparentModeCheck = "dnsproxy-insecure-skip-transparent-mode-check"
@@ -1393,20 +1378,6 @@ type DaemonConfig struct {
 	SocketPath             string
 	TracePayloadlen        int
 	TracePayloadlenOverlay int
-	ToFQDNsMinTTL          int
-
-	// ToFQDNsMaxIPsPerHost defines the maximum number of IPs to maintain
-	// for each FQDN name in an endpoint's FQDN cache
-	ToFQDNsMaxIPsPerHost int
-
-	// ToFQDNsMaxIPsPerHost defines the maximum number of IPs to retain for
-	// expired DNS lookups with still-active connections
-	ToFQDNsMaxDeferredConnectionDeletes int
-
-	// ToFQDNsIdleConnectionGracePeriod Time during which idle but
-	// previously active connections with expired DNS lookups are
-	// still considered alive
-	ToFQDNsIdleConnectionGracePeriod time.Duration
 
 	// EnableBPFTProxy enables implementing proxy redirection via BPF
 	// mechanisms rather than iptables rules.
@@ -1759,7 +1730,6 @@ var Config = &DaemonConfig{
 	EnableIPv6NDP:                   defaults.EnableIPv6NDP,
 	EnableSCTP:                      defaults.EnableSCTP,
 	EnableL7Proxy:                   defaults.EnableL7Proxy,
-	ToFQDNsMaxIPsPerHost:            defaults.ToFQDNsMaxIPsPerHost,
 	IdentityChangeGracePeriod:       defaults.IdentityChangeGracePeriod,
 	CiliumIdentityMaxJitter:         defaults.CiliumIdentityMaxJitter,
 	IdentityRestoreGracePeriod:      defaults.IdentityRestoreGracePeriodK8s,
@@ -2551,22 +2521,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 
 	c.ClockSource = ClockSourceKtime
 	c.EnableIdentityMark = vp.GetBool(EnableIdentityMark)
-
-	// toFQDNs options
-	c.ToFQDNsMaxIPsPerHost = vp.GetInt(ToFQDNsMaxIPsPerHost)
-	if maxZombies := vp.GetInt(ToFQDNsMaxDeferredConnectionDeletes); maxZombies >= 0 {
-		c.ToFQDNsMaxDeferredConnectionDeletes = vp.GetInt(ToFQDNsMaxDeferredConnectionDeletes)
-	} else {
-		logging.Fatal(logger, fmt.Sprintf("%s must be positive, or 0 to disable deferred connection deletion",
-			ToFQDNsMaxDeferredConnectionDeletes))
-	}
-	switch {
-	case vp.IsSet(ToFQDNsMinTTL): // set by user
-		c.ToFQDNsMinTTL = vp.GetInt(ToFQDNsMinTTL)
-	default:
-		c.ToFQDNsMinTTL = defaults.ToFQDNsMinTTL
-	}
-	c.ToFQDNsIdleConnectionGracePeriod = vp.GetDuration(ToFQDNsIdleConnectionGracePeriod)
 
 	subnets, err := ip.ParsePrefixes(vp.GetStringSlice(IPv4PodSubnets))
 	if err != nil {

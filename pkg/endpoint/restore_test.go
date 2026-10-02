@@ -18,13 +18,96 @@ import (
 	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/require"
 
+	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	fqdnrestore "github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/mac"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/policy"
+	testpolicy "github.com/cilium/cilium/pkg/testutils/policy"
+	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
+
+func TestFQDNConfigCreateAndRestore(t *testing.T) {
+	logger := hivetest.Logger(t)
+	cfg := fqdnconfig.DefaultConfig
+	cfg.ToFQDNsMinTTL = 30
+	cfg.ToFQDNsMaxIPsPerHost = 2
+	cfg.ToFQDNsMaxDeferredConnectionDeletes = 7
+	cfg.ToFQDNsIdleConnectionGracePeriod = 10 * time.Second
+	params := EndpointParams{
+		Logger:     logger,
+		FQDNConfig: cfg,
+		PolicyRepo: policy.NewPolicyRepository(logger, cmtypes.DefaultClusterInfo, nil, nil, nil, nil, testpolicy.NewPolicyMetricsNoop()),
+	}
+	fresh := createEndpoint(params, nil, nil, 123, "", nil)
+	t.Cleanup(fresh.aliveCancel)
+	now := time.Now()
+	oldIP := netip.MustParseAddr("192.0.2.1")
+	fresh.DNSHistory.Update(now, "existing.example.", []netip.Addr{oldIP}, 1)
+	fresh.DNSZombies.Upsert(now, oldIP, "zombie.example.")
+	raw, err := fresh.MarshalJSON()
+	require.NoError(t, err)
+
+	restoreCfg := cfg
+	restoreCfg.ToFQDNsMinTTL = 60
+	restoreCfg.ToFQDNsMaxIPsPerHost = 1
+	restoreCfg.ToFQDNsMaxDeferredConnectionDeletes = 4
+	restoreCfg.ToFQDNsIdleConnectionGracePeriod = 20 * time.Second
+	params.FQDNConfig = restoreCfg
+	restored, err := ParseEndpoint(params, nil, nil, raw, nil)
+	require.NoError(t, err)
+	t.Cleanup(restored.aliveCancel)
+	require.Equal(t, []netip.Addr{oldIP}, restored.DNSHistory.Lookup("existing.example."))
+
+	for _, tt := range []struct {
+		name string
+		ep   *Endpoint
+		cfg  fqdnconfig.Config
+	}{
+		{"fresh", fresh, cfg},
+		{"restored", restored, restoreCfg},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.cfg, tt.ep.fqdnConfig)
+			ips := []netip.Addr{
+				netip.MustParseAddr("192.0.2.2"),
+				netip.MustParseAddr("192.0.2.3"),
+				netip.MustParseAddr("192.0.2.4"),
+			}
+			tt.ep.DNSHistory.Update(now, "new.example.", ips, 1)
+			found := false
+			for _, entry := range tt.ep.DNSHistory.Dump() {
+				if entry.Name == "new.example." {
+					found = true
+					require.Equal(t, tt.cfg.ToFQDNsMinTTL, entry.TTL)
+				}
+			}
+			require.True(t, found)
+			tt.ep.DNSHistory.GC(now, nil)
+			require.Len(t, tt.ep.DNSHistory.Lookup("new.example."), tt.cfg.ToFQDNsMaxIPsPerHost)
+
+			for i := 0; i <= tt.cfg.ToFQDNsMaxDeferredConnectionDeletes; i++ {
+				tt.ep.DNSZombies.Upsert(now, netip.AddrFrom4([4]byte{192, 0, 2, byte(100 + i)}), fmt.Sprintf("zombie-%d.example.", i))
+			}
+			alive, _ := tt.ep.DNSZombies.GC()
+			require.Len(t, alive, tt.cfg.ToFQDNsMaxDeferredConnectionDeletes)
+			boundary := now.Add(tt.cfg.ToFQDNsIdleConnectionGracePeriod)
+			tt.ep.DNSZombies.SetCTGCTime(boundary, boundary.Add(time.Second))
+			tt.ep.DNSZombies.SetCTGCTime(boundary, boundary.Add(time.Second))
+			alive, dead := tt.ep.DNSZombies.GC()
+			require.Len(t, alive, tt.cfg.ToFQDNsMaxDeferredConnectionDeletes)
+			require.Empty(t, dead)
+			tt.ep.DNSZombies.SetCTGCTime(boundary.Add(time.Nanosecond), boundary.Add(time.Second))
+			alive, dead = tt.ep.DNSZombies.GC()
+			require.Empty(t, alive)
+			require.Len(t, dead, tt.cfg.ToFQDNsMaxDeferredConnectionDeletes)
+		})
+	}
+}
 
 func (s *EndpointSuite) createEndpointParams(tb testing.TB) EndpointParams {
 	return createEndpointParams(tb, s.orchestrator, s.repo, s.fetcher)

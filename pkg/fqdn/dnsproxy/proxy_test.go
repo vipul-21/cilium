@@ -270,6 +270,7 @@ func (s *DNSProxyTestSuite) LookupByIdentity(nid identity.NumericIdentity) []str
 
 func makeProxyTestEndpointParams(logger *slog.Logger, repo policy.PolicyRepository, fetcher compute.PolicyRecomputer) endpoint.EndpointParams {
 	return endpoint.EndpointParams{
+		FQDNConfig:      fqdnconfig.DefaultConfig,
 		Logger:          logger,
 		EPBuildQueue:    &endpoint.MockEndpointBuildQueue{},
 		PolicyRepo:      repo,

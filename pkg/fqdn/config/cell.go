@@ -6,7 +6,14 @@ package config
 import "github.com/cilium/hive/cell"
 
 // Cell provides the configuration shared by the FQDN components.
-var Cell = cell.Config(DefaultConfig)
+var Cell = newCell(DefaultConfig)
 
 // StandaloneCell provides the same configuration with the standalone proxy's defaults.
-var StandaloneCell = cell.Config(DefaultStandaloneConfig)
+var StandaloneCell = newCell(DefaultStandaloneConfig)
+
+func newCell(defaults Config) cell.Cell {
+	return cell.Group(
+		cell.Config(defaults),
+		cell.Invoke(Config.Validate),
+	)
+}

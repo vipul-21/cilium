@@ -31,7 +31,6 @@ var Cell = cell.Module(
 
 	cell.ProvidePrivate(func(dc *option.DaemonConfig) NameManagerConfig {
 		return NameManagerConfig{
-			MinTTL:     dc.ToFQDNsMinTTL,
 			StateDir:   dc.StateDir,
 			EnableIPv4: dc.EnableIPv4,
 			EnableIPv6: dc.EnableIPv6,
@@ -46,9 +45,6 @@ var Cell = cell.Module(
 )
 
 type NameManagerConfig struct {
-	// MinTTL is the minimum TTL value that a cache entry can have.
-	MinTTL int
-
 	// StateDir is the directory where namemanager checkpoints are stored.
 	StateDir string
 

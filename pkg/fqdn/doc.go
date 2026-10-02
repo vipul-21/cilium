@@ -178,7 +178,7 @@
 // there may still be an active connection associated with the zombie IP.
 // Externally, related options use the term "deferred connection delete".
 // Zombies are tracked per IP for the endpoint they come from (with a default
-// limit of 10000 set by defaults.ToFQDNsMaxDeferredConnectionDeletes). When
+// limit of 10000 set by config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes). When
 // the Connection Tracking garbage collector runs, it marks any zombie IP that
 // correlates to a live connection by that endpoint as "alive". At the next
 // iteration of the dns-garbage-collector-job controller, the not-live zombies

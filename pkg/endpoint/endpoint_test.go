@@ -31,6 +31,7 @@ import (
 	fakeendpoint "github.com/cilium/cilium/pkg/endpoint/fake"
 	endpoint "github.com/cilium/cilium/pkg/endpoint/types"
 	"github.com/cilium/cilium/pkg/eventqueue"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	fqdnrestore "github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
@@ -318,6 +319,7 @@ func TestEndpointStatus(t *testing.T) {
 func createEndpointParams(tb testing.TB, o endpoint.Orchestrator, r policy.PolicyRepository, fetcher compute.PolicyRecomputer) EndpointParams {
 	logger := hivetest.Logger(tb)
 	return EndpointParams{
+		FQDNConfig:       fqdnconfig.DefaultConfig,
 		Logger:           logger,
 		EPBuildQueue:     &MockEndpointBuildQueue{},
 		Orchestrator:     o,
@@ -500,6 +502,7 @@ func TestApplySourceIPVerificationFromAnnotation(t *testing.T) {
 			// Create a minimal endpoint for testing
 			model := newTestEndpointModel(100, StateWaitingForIdentity)
 			p := EndpointParams{
+				FQDNConfig:      fqdnconfig.DefaultConfig,
 				Logger:          logger,
 				EPBuildQueue:    &MockEndpointBuildQueue{},
 				Orchestrator:    s.orchestrator,
@@ -550,6 +553,7 @@ func TestApplySourceIPVerificationResetsToGlobalDefault(t *testing.T) {
 	// Create endpoint
 	model := newTestEndpointModel(100, StateWaitingForIdentity)
 	p := EndpointParams{
+		FQDNConfig:      fqdnconfig.DefaultConfig,
 		Logger:          logger,
 		EPBuildQueue:    &MockEndpointBuildQueue{},
 		Orchestrator:    s.orchestrator,
@@ -727,15 +731,15 @@ func TestInitialNamedPortsIdentityLabel(t *testing.T) {
 				}
 			}
 			return &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: ns,
-					Name:      podName,
-					UID:       k8sTypes.UID(uid),
-				},
-			}, &K8sMetadata{
-				IdentityLabels: lbls,
-				NamedPorts:     namedPorts,
-			}, nil
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: ns,
+						Name:      podName,
+						UID:       k8sTypes.UID(uid),
+					},
+				}, &K8sMetadata{
+					IdentityLabels: lbls,
+					NamedPorts:     namedPorts,
+				}, nil
 		}
 	}
 	resolvePodMetadata := func(t *testing.T, e *Endpoint, restored bool, namedPorts ciliumTypes.NamedPortMap) {

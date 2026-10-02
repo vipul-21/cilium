@@ -71,8 +71,8 @@ func TestMapIPsToSelectors(t *testing.T) {
 		ciliumIP2   = netip.MustParseAddr("1.2.3.5")
 		nameManager = New(ManagerParams{
 			Logger: logger,
-			Config: NameManagerConfig{
-				MinTTL: 1,
+			FQDNConfig: fqdnconfig.Config{
+				ToFQDNsMinTTL: 1,
 			},
 		})
 	)
@@ -158,11 +158,13 @@ func TestNameManagerIPCacheUpdates(t *testing.T) {
 	nameManager := New(ManagerParams{
 		Logger: logger,
 		Config: NameManagerConfig{
-			MinTTL:   1,
 			StateDir: option.Config.StateDir,
 		},
-		FQDNConfig: fqdnconfig.DefaultConfig,
-		IPCache:    ipc,
+		FQDNConfig: fqdnconfig.Config{
+			ToFQDNsMinTTL:     1,
+			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+		},
+		IPCache: ipc,
 	})
 
 	err := ipc.WaitForRevision(t.Context(), nameManager.RegisterFQDNSelector(ciliumIOSel))
@@ -258,7 +260,7 @@ func TestNameManagerGCConsistency(t *testing.T) {
 	ep := &endpoint.Endpoint{ID: uint16(1), IPv4: netip.MustParseAddr("10.96.0.1"), SecurityIdentity: &identity.Identity{
 		ID: identity.NumericIdentity(int(cmtypes.DefaultClusterInfo.MaximumAllocationIdentity())),
 	},
-		DNSZombies: fqdn.NewDNSZombieMappings(logger, 10000, 10000),
+		DNSZombies: fqdn.NewDNSZombieMappings(logger, 10000, 10000, 0),
 		DNSHistory: fqdn.NewDNSCache(1),
 	}
 	ep.UpdateLogger(nil)
@@ -273,12 +275,14 @@ func TestNameManagerGCConsistency(t *testing.T) {
 	nameManager := New(ManagerParams{
 		Logger: logger,
 		Config: NameManagerConfig{
-			MinTTL:   1,
 			StateDir: option.Config.StateDir,
 		},
-		FQDNConfig: fqdnconfig.DefaultConfig,
-		EPMgr:      &epMgr,
-		IPCache:    ipc,
+		FQDNConfig: fqdnconfig.Config{
+			ToFQDNsMinTTL:     1,
+			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+		},
+		EPMgr:   &epMgr,
+		IPCache: ipc,
 	})
 	// Manually configure bootstrap to be done to fully test manager end-to-end
 	nameManager.bootstrapCompleted = true

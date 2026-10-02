@@ -541,8 +541,8 @@ func (ep *Endpoint) UnmarshalJSON(raw []byte) error {
 	restoredEp := &serializableEndpoint{
 		Labels:     labels.NewOpLabels(),
 		Options:    option.NewIntOptions(&EndpointMutableOptionLibrary),
-		DNSHistory: fqdn.NewDNSCacheWithLimit(option.Config.ToFQDNsMinTTL, option.Config.ToFQDNsMaxIPsPerHost),
-		DNSZombies: fqdn.NewDNSZombieMappings(ep.Logger(subsystem), option.Config.ToFQDNsMaxDeferredConnectionDeletes, option.Config.ToFQDNsMaxIPsPerHost),
+		DNSHistory: fqdn.NewDNSCacheWithLimit(ep.fqdnConfig.ToFQDNsMinTTL, ep.fqdnConfig.ToFQDNsMaxIPsPerHost),
+		DNSZombies: fqdn.NewDNSZombieMappings(ep.Logger(subsystem), ep.fqdnConfig.ToFQDNsMaxDeferredConnectionDeletes, ep.fqdnConfig.ToFQDNsMaxIPsPerHost, ep.fqdnConfig.ToFQDNsIdleConnectionGracePeriod),
 	}
 	if err := json.Unmarshal(raw, restoredEp); err != nil {
 		return fmt.Errorf("error unmarshaling serializableEndpoint from base64 representation: %w", err)

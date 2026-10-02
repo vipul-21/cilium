@@ -615,18 +615,6 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	flags.MarkHidden(option.CMDRef)
 	option.BindEnv(vp, option.CMDRef)
 
-	flags.Int(option.ToFQDNsMinTTL, defaults.ToFQDNsMinTTL, "The minimum time, in seconds, to use DNS data for toFQDNs policies")
-	option.BindEnv(vp, option.ToFQDNsMinTTL)
-
-	flags.Int(option.ToFQDNsMaxIPsPerHost, defaults.ToFQDNsMaxIPsPerHost, "Maximum number of IPs to maintain per FQDN name for each endpoint")
-	option.BindEnv(vp, option.ToFQDNsMaxIPsPerHost)
-
-	flags.Int(option.ToFQDNsMaxDeferredConnectionDeletes, defaults.ToFQDNsMaxDeferredConnectionDeletes, "Maximum number of IPs to retain for expired DNS lookups with still-active connections")
-	option.BindEnv(vp, option.ToFQDNsMaxDeferredConnectionDeletes)
-
-	flags.Duration(option.ToFQDNsIdleConnectionGracePeriod, defaults.ToFQDNsIdleConnectionGracePeriod, "Time during which idle but previously active connections with expired DNS lookups are still considered alive (default 0s)")
-	option.BindEnv(vp, option.ToFQDNsIdleConnectionGracePeriod)
-
 	flags.Int(option.EndpointQueueSize, defaults.EndpointQueueSize, "Size of EventQueue per-endpoint")
 	option.BindEnv(vp, option.EndpointQueueSize)
 

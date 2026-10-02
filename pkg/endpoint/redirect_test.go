@@ -18,6 +18,7 @@ import (
 	fakeendpoint "github.com/cilium/cilium/pkg/endpoint/fake"
 	endpointtypes "github.com/cilium/cilium/pkg/endpoint/types"
 	envoypolicy "github.com/cilium/cilium/pkg/envoy/policy"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
@@ -170,6 +171,7 @@ const (
 func (s *RedirectSuite) createTestEndpointParams(tb testing.TB) EndpointParams {
 	logger := hivetest.Logger(tb)
 	return EndpointParams{
+		FQDNConfig:      fqdnconfig.DefaultConfig,
 		Logger:          logger,
 		EPBuildQueue:    &MockEndpointBuildQueue{},
 		Orchestrator:    &fakeendpoint.FakeOrchestrator{},

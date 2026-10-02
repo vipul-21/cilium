@@ -30,6 +30,10 @@ const (
 	DNSProxyConcurrencyLimit                 = "dnsproxy-concurrency-limit"
 	DNSProxyEnableTransparentMode            = "dnsproxy-enable-transparent-mode"
 	DNSProxySocketLingerTimeout              = "dnsproxy-socket-linger-timeout"
+	ToFQDNsMinTTL                            = "tofqdns-min-ttl"
+	ToFQDNsMaxIPsPerHost                     = "tofqdns-endpoint-max-ip-per-hostname"
+	ToFQDNsMaxDeferredConnectionDeletes      = "tofqdns-max-deferred-connection-deletes"
+	ToFQDNsIdleConnectionGracePeriod         = "tofqdns-idle-connection-grace-period"
 
 	FQDNProxyDenyWithNameError = "nameError"
 	FQDNProxyDenyWithRefused   = "refused"
@@ -55,6 +59,10 @@ type Config struct {
 	DNSProxyConcurrencyLimit                 int
 	DNSProxyEnableTransparentMode            bool
 	DNSProxySocketLingerTimeout              int
+	ToFQDNsMinTTL                            int
+	ToFQDNsMaxIPsPerHost                     int `mapstructure:"tofqdns-endpoint-max-ip-per-hostname"`
+	ToFQDNsMaxDeferredConnectionDeletes      int
+	ToFQDNsIdleConnectionGracePeriod         time.Duration
 }
 
 var DefaultConfig = Config{
@@ -70,6 +78,8 @@ var DefaultConfig = Config{
 	FQDNRejectResponse:                       FQDNProxyDenyWithRefused,
 	FQDNRegexCompileLRUSize:                  1024,
 	DNSProxySocketLingerTimeout:              10,
+	ToFQDNsMaxIPsPerHost:                     1000,
+	ToFQDNsMaxDeferredConnectionDeletes:      10000,
 }
 
 // These legacy flags were not registered by standalone-dns-proxy, so absent
@@ -82,6 +92,8 @@ var DefaultStandaloneConfig = func() Config {
 	cfg.FQDNRejectResponse = ""
 	cfg.FQDNRegexCompileLRUSize = 0
 	cfg.DNSProxySocketLingerTimeout = 0
+	cfg.ToFQDNsMaxIPsPerHost = 0
+	cfg.ToFQDNsMaxDeferredConnectionDeletes = 0
 	return cfg
 }()
 
@@ -108,4 +120,15 @@ func (def Config) Flags(flags *pflag.FlagSet) {
 	flags.Bool(DNSProxyEnableTransparentMode, def.DNSProxyEnableTransparentMode, "Enable DNS proxy transparent mode")
 	flags.Int(DNSProxySocketLingerTimeout, def.DNSProxySocketLingerTimeout, "Timeout (in seconds) when closing the connection between the DNS proxy and the upstream server. "+
 		"If set to 0, the connection is closed immediately (with TCP RST). If set to -1, the connection is closed asynchronously in the background")
+	flags.Int(ToFQDNsMinTTL, def.ToFQDNsMinTTL, "The minimum time, in seconds, to use DNS data for toFQDNs policies")
+	flags.Int(ToFQDNsMaxIPsPerHost, def.ToFQDNsMaxIPsPerHost, "Maximum number of IPs to maintain per FQDN name for each endpoint")
+	flags.Int(ToFQDNsMaxDeferredConnectionDeletes, def.ToFQDNsMaxDeferredConnectionDeletes, "Maximum number of IPs to retain for expired DNS lookups with still-active connections")
+	flags.Duration(ToFQDNsIdleConnectionGracePeriod, def.ToFQDNsIdleConnectionGracePeriod, "Time during which idle but previously active connections with expired DNS lookups are still considered alive (default 0s)")
+}
+
+func (cfg Config) Validate() error {
+	if cfg.ToFQDNsMaxDeferredConnectionDeletes < 0 {
+		return fmt.Errorf("%s must be positive, or 0 to disable deferred connection deletion", ToFQDNsMaxDeferredConnectionDeletes)
+	}
+	return nil
 }

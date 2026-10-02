@@ -44,11 +44,13 @@ func BenchmarkUpdateGenerateDNS(b *testing.B) {
 	nameManager := New(ManagerParams{
 		Logger: logger,
 		Config: NameManagerConfig{
-			MinTTL:   1,
 			StateDir: defaults.StateDir,
 		},
-		FQDNConfig: fqdnconfig.DefaultConfig,
-		IPCache:    testipcache.NewMockIPCache(),
+		FQDNConfig: fqdnconfig.Config{
+			ToFQDNsMinTTL:     1,
+			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+		},
+		IPCache: testipcache.NewMockIPCache(),
 	})
 
 	for i := range numSelectors {
@@ -106,12 +108,14 @@ func BenchmarkFqdnCache(b *testing.B) {
 	nameManager := New(ManagerParams{
 		Logger: logger,
 		Config: NameManagerConfig{
-			MinTTL:   1,
 			StateDir: defaults.StateDir,
 		},
-		FQDNConfig: fqdnconfig.DefaultConfig,
-		IPCache:    testipcache.NewMockIPCache(),
-		EPMgr:      &epMgrMock{logger, caches},
+		FQDNConfig: fqdnconfig.Config{
+			ToFQDNsMinTTL:     1,
+			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+		},
+		IPCache: testipcache.NewMockIPCache(),
+		EPMgr:   &epMgrMock{logger, caches},
 	})
 	prefixMatcher := func(_ netip.Addr) bool { return true }
 	nameMatcher := func(_ string) bool { return true }
@@ -136,7 +140,7 @@ func (mgr *epMgrMock) GetEndpoints() []*endpoint.Endpoint {
 		out = append(out, &endpoint.Endpoint{
 			ID:         uint16(i),
 			DNSHistory: c,
-			DNSZombies: fqdn.NewDNSZombieMappings(mgr.logger, 1000, 1000),
+			DNSZombies: fqdn.NewDNSZombieMappings(mgr.logger, 1000, 1000, 0),
 		})
 	}
 	return out

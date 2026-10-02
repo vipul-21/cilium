@@ -22,10 +22,12 @@ func FuzzMapSelectorsToNamesLocked(f *testing.F) {
 		nameManager := New(ManagerParams{
 			Logger: slog.New(slog.DiscardHandler),
 			Config: NameManagerConfig{
-				MinTTL:   1,
 				StateDir: defaults.StateDir,
 			},
-			FQDNConfig: fqdnconfig.DefaultConfig,
+			FQDNConfig: fqdnconfig.Config{
+				ToFQDNsMinTTL:     1,
+				DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+			},
 		})
 		nameManager.mapSelectorsToNamesLocked(fqdnSelector)
 	})

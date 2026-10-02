@@ -130,10 +130,12 @@ func BenchmarkNotifyOnDNSMsg(b *testing.B) {
 	ipc := &mockipc.MockIPCache{}
 	nm := namemanager.New(namemanager.ManagerParams{
 		Config: namemanager.NameManagerConfig{
-			MinTTL:   1,
 			StateDir: defaults.StateDir,
 		},
-		FQDNConfig: fqdnconfig.DefaultConfig,
+		FQDNConfig: fqdnconfig.Config{
+			ToFQDNsMinTTL:     1,
+			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+		},
 		IPCache:    ipc,
 		PolicyRepo: policyRepo,
 		Logger:     logger,

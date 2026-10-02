@@ -114,23 +114,6 @@ const (
 	// DefaultCgroupRoot is the default path where cilium cgroup2 should be mounted
 	DefaultCgroupRoot = "/run/cilium/cgroupv2"
 
-	// ToFQDNsMinTTL is the default lower bound for TTLs used with ToFQDNs rules.
-	// This is used in DaemonConfig.Populate
-	ToFQDNsMinTTL = 0
-
-	// ToFQDNsMaxIPsPerHost defines the maximum number of IPs to maintain
-	// for each FQDN name in an endpoint's FQDN cache
-	ToFQDNsMaxIPsPerHost = 1000
-
-	// ToFQDNsMaxDeferredConnectionDeletes Maximum number of IPs to retain for
-	// expired DNS lookups with still-active connections
-	ToFQDNsMaxDeferredConnectionDeletes = 10000
-
-	// ToFQDNsIdleConnectionGracePeriod Time during which idle but
-	// previously active connections with expired DNS lookups are
-	// still considered alive
-	ToFQDNsIdleConnectionGracePeriod = 0 * time.Second
-
 	// IdentityChangeGracePeriod is the default value for
 	// option.IdentityChangeGracePeriod
 	IdentityChangeGracePeriod = 5 * time.Second

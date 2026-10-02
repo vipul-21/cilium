@@ -28,6 +28,7 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointstate"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/metrics"
@@ -73,6 +74,7 @@ type parameters struct {
 	DB                      *statedb.DB
 	NodeAddrs               statedb.Table[tables.NodeAddress]
 	DaemonConfig            *option.DaemonConfig
+	FQDNConfig              fqdnconfig.Config
 	EndpointRestorerPromise promise.Promise[endpointstate.Restorer]
 	EndpointManager         EndpointManager
 	NodeAddressing          node.Addressing
@@ -98,6 +100,7 @@ type GC struct {
 	logger      *slog.Logger
 	config      config
 	clusterInfo cmtypes.ClusterInfo
+	fqdnConfig  fqdnconfig.Config
 
 	ipv4 bool
 	ipv6 bool
@@ -134,6 +137,7 @@ func newGC(params parameters) *GC {
 		logger:      params.Logger,
 		config:      params.Config,
 		clusterInfo: params.ClusterInfo,
+		fqdnConfig:  params.FQDNConfig,
 
 		ipv4: params.DaemonConfig.EnableIPv4,
 		ipv6: params.DaemonConfig.EnableIPv6,
@@ -276,7 +280,7 @@ func (gc *GC) enableWithConfig(
 				// aliveTime is offset to the future by ToFQDNsIdleConnectionGracePeriod
 				// (default 0), allowing previously active connections to be considerred
 				// alive during idle periods of upto ToFQDNsIdleConnectionGracePeriod.
-				aliveTime = gcStart.Add(option.Config.ToFQDNsIdleConnectionGracePeriod)
+				aliveTime = gcStart.Add(gc.fqdnConfig.ToFQDNsIdleConnectionGracePeriod)
 
 				emitEntryCB = func(srcIP, dstIP ctmap.NetAddr, srcPort, dstPort uint16, nextHdr, flags uint8, entry *ctmap.CtEntry) {
 					// FQDN related connections can only be outbound

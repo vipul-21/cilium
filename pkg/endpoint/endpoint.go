@@ -38,6 +38,7 @@ import (
 	endpoint "github.com/cilium/cilium/pkg/endpoint/types"
 	"github.com/cilium/cilium/pkg/eventqueue"
 	"github.com/cilium/cilium/pkg/fqdn"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
@@ -147,6 +148,7 @@ type Endpoint struct {
 	identityManager  identitymanager.IDManager
 	monitorAgent     monitoragent.Agent
 	wgConfig         wgTypes.Config
+	fqdnConfig       fqdnconfig.Config
 	ipsecConfig      ipsec.Config
 	lxcMap           lxcmap.Map
 	localNodeStore   node.NodeGetter
@@ -629,6 +631,7 @@ func createEndpoint(
 		identityManager:    p.IdentityManager,
 		monitorAgent:       p.MonitorAgent,
 		wgConfig:           p.WgConfig,
+		fqdnConfig:         p.FQDNConfig,
 		ipsecConfig:        p.IPSecConfig,
 		lxcMap:             p.LxcMap,
 		localNodeStore:     p.LocalNodeStore,
@@ -643,8 +646,8 @@ func createEndpoint(
 		labels:             labels.NewOpLabels(),
 		Options:            option.NewIntOptions(&EndpointMutableOptionLibrary),
 		DNSRules:           nil,
-		DNSHistory:         fqdn.NewDNSCacheWithLimit(option.Config.ToFQDNsMinTTL, option.Config.ToFQDNsMaxIPsPerHost),
-		DNSZombies:         fqdn.NewDNSZombieMappings(p.Logger, option.Config.ToFQDNsMaxDeferredConnectionDeletes, option.Config.ToFQDNsMaxIPsPerHost),
+		DNSHistory:         fqdn.NewDNSCacheWithLimit(p.FQDNConfig.ToFQDNsMinTTL, p.FQDNConfig.ToFQDNsMaxIPsPerHost),
+		DNSZombies:         fqdn.NewDNSZombieMappings(p.Logger, p.FQDNConfig.ToFQDNsMaxDeferredConnectionDeletes, p.FQDNConfig.ToFQDNsMaxIPsPerHost, p.FQDNConfig.ToFQDNsIdleConnectionGracePeriod),
 		state:              "",
 		status:             NewEndpointStatus(),
 		hasBPFProgram:      make(chan struct{}),
@@ -966,6 +969,7 @@ func ParseEndpoint(p EndpointParams,
 		identityManager:  p.IdentityManager,
 		monitorAgent:     p.MonitorAgent,
 		wgConfig:         p.WgConfig,
+		fqdnConfig:       p.FQDNConfig,
 		ipsecConfig:      p.IPSecConfig,
 		lxcMap:           p.LxcMap,
 		localNodeStore:   p.LocalNodeStore,

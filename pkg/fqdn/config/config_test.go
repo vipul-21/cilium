@@ -4,6 +4,7 @@
 package config_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -36,6 +37,10 @@ func TestConfig(t *testing.T) {
 	overridden.DNSProxyConcurrencyLimit = 7
 	overridden.DNSProxyEnableTransparentMode = true
 	overridden.DNSProxySocketLingerTimeout = -1
+	overridden.ToFQDNsMinTTL = 30
+	overridden.ToFQDNsMaxIPsPerHost = 3
+	overridden.ToFQDNsMaxDeferredConnectionDeletes = 9
+	overridden.ToFQDNsIdleConnectionGracePeriod = 5 * time.Second
 
 	for _, tt := range []struct {
 		name      string
@@ -69,6 +74,10 @@ func TestConfig(t *testing.T) {
 					"--dnsproxy-concurrency-limit=7",
 					"--dnsproxy-enable-transparent-mode",
 					"--dnsproxy-socket-linger-timeout=-1",
+					"--tofqdns-min-ttl=30",
+					"--tofqdns-endpoint-max-ip-per-hostname=3",
+					"--tofqdns-max-deferred-connection-deletes=9",
+					"--tofqdns-idle-connection-grace-period=5s",
 				}))
 			},
 			want: overridden,
@@ -93,6 +102,10 @@ func TestConfig(t *testing.T) {
 				t.Setenv("CILIUM_DNSPROXY_CONCURRENCY_LIMIT", "7")
 				t.Setenv("CILIUM_DNSPROXY_ENABLE_TRANSPARENT_MODE", "true")
 				t.Setenv("CILIUM_DNSPROXY_SOCKET_LINGER_TIMEOUT", "-1")
+				t.Setenv("CILIUM_TOFQDNS_MIN_TTL", "30")
+				t.Setenv("CILIUM_TOFQDNS_ENDPOINT_MAX_IP_PER_HOSTNAME", "3")
+				t.Setenv("CILIUM_TOFQDNS_MAX_DEFERRED_CONNECTION_DELETES", "9")
+				t.Setenv("CILIUM_TOFQDNS_IDLE_CONNECTION_GRACE_PERIOD", "5s")
 			},
 			want: overridden,
 		},
@@ -118,6 +131,10 @@ fqdn-regex-compile-lru-size: 2048
 dnsproxy-concurrency-limit: 7
 dnsproxy-enable-transparent-mode: true
 dnsproxy-socket-linger-timeout: -1
+tofqdns-min-ttl: "30"
+tofqdns-endpoint-max-ip-per-hostname: "3"
+tofqdns-max-deferred-connection-deletes: "9"
+tofqdns-idle-connection-grace-period: "5s"
 `)))
 			},
 			want: overridden,
@@ -151,6 +168,23 @@ dnsproxy-socket-linger-timeout: -1
 	}
 }
 
+func TestConfigValidation(t *testing.T) {
+	for _, configCell := range []cell.Cell{config.Cell, config.StandaloneCell} {
+		for _, max := range []int{-1, 0, 9} {
+			t.Run(fmt.Sprint(max), func(t *testing.T) {
+				h := hive.New(configCell)
+				h.Viper().Set(config.ToFQDNsMaxDeferredConnectionDeletes, max)
+				err := h.Populate(hivetest.Logger(t))
+				if max < 0 {
+					require.ErrorContains(t, err, "tofqdns-max-deferred-connection-deletes must be positive, or 0 to disable deferred connection deletion")
+				} else {
+					require.NoError(t, err)
+				}
+			})
+		}
+	}
+}
+
 func TestStandaloneDefaults(t *testing.T) {
 	want := config.DefaultConfig
 	want.DNSProxyLockCount = 0
@@ -159,6 +193,8 @@ func TestStandaloneDefaults(t *testing.T) {
 	want.FQDNRejectResponse = ""
 	want.FQDNRegexCompileLRUSize = 0
 	want.DNSProxySocketLingerTimeout = 0
+	want.ToFQDNsMaxIPsPerHost = 0
+	want.ToFQDNsMaxDeferredConnectionDeletes = 0
 
 	var got config.Config
 	h := hive.New(

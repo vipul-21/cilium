@@ -16,8 +16,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/lock"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 )
 
@@ -940,20 +940,22 @@ type DNSZombieMappings struct {
 	// ctGCRevision is a serial number tracking the number of conntrack
 	// garbage collection runs. It is used to ensure that entries
 	// are not reaped until CT GC has run at least twice.
-	ctGCRevision uint64
-	max          int // max allowed zombies
+	ctGCRevision    uint64
+	max             int // max allowed zombies
+	idleGracePeriod time.Duration
 
 	// perHostLimit is the number of maximum number of IP per host.
 	perHostLimit int
 }
 
 // NewDNSZombieMappings constructs a DNSZombieMappings that is read to use
-func NewDNSZombieMappings(logger *slog.Logger, max, perHostLimit int) *DNSZombieMappings {
+func NewDNSZombieMappings(logger *slog.Logger, max, perHostLimit int, idleGracePeriod time.Duration) *DNSZombieMappings {
 	return &DNSZombieMappings{
-		logger:       logger,
-		deletes:      make(map[netip.Addr]*DNSZombieMapping),
-		max:          max,
-		perHostLimit: perHostLimit,
+		logger:          logger,
+		deletes:         make(map[netip.Addr]*DNSZombieMapping),
+		max:             max,
+		perHostLimit:    perHostLimit,
+		idleGracePeriod: idleGracePeriod,
 	}
 }
 
@@ -1000,7 +1002,7 @@ func (zombies *DNSZombieMappings) Upsert(expiryTime time.Time, addr netip.Addr, 
 // in which case it may not have been marked alive. We need to wait for GC to finish at least 2 times
 // before we can safely consider it dead.
 func (zombies *DNSZombieMappings) isConnectionAlive(zombie *DNSZombieMapping) bool {
-	if !zombies.lastCTGCUpdate.After(zombie.DeletePendingAt.Add(option.Config.ToFQDNsIdleConnectionGracePeriod)) {
+	if !zombies.lastCTGCUpdate.After(zombie.DeletePendingAt.Add(zombies.idleGracePeriod)) {
 		return true
 	}
 	if !zombies.lastCTGCUpdate.After(zombie.AliveAt) {
@@ -1159,7 +1161,7 @@ func (zombies *DNSZombieMappings) GC() (alive, dead []*DNSZombieMapping) {
 			}
 		}
 		if warnActiveDNSEntries {
-			zombies.logger.Warn(fmt.Sprintf("Evicting expired DNS cache entries that may be in-use due to per-host limits. This may cause recently created connections to be disconnected. Raise %s to mitigate this.", option.ToFQDNsMaxIPsPerHost))
+			zombies.logger.Warn(fmt.Sprintf("Evicting expired DNS cache entries that may be in-use due to per-host limits. This may cause recently created connections to be disconnected. Raise %s to mitigate this.", fqdnconfig.ToFQDNsMaxIPsPerHost))
 		}
 
 		for _, dead := range dead[deadIdx:] {

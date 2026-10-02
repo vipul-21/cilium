@@ -30,6 +30,7 @@ import (
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	envoypolicy "github.com/cilium/cilium/pkg/envoy/policy"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/identity"
@@ -114,6 +115,7 @@ func newTestFixture(t testing.TB, log *slog.Logger, certMgr certificatemanager.C
 				var err error
 				f.templateEP, err = endpoint.NewEndpointFromChangeModel(
 					endpoint.EndpointParams{
+						FQDNConfig:          fqdnconfig.DefaultConfig,
 						Logger:              log,
 						EPBuildQueue:        endpoint.NewEndpointBuildQueue(),
 						Loader:              &fakeloader.Loader{},
