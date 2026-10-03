@@ -252,8 +252,7 @@ func (d *defaultListener) listenUnix(ctx context.Context, path string) (net.List
 		return nil, fmt.Errorf("failed to change mode of standalone DNS proxy listen socket at %s: %w", path, err)
 	}
 	// Change the group to ProxyGID allowing access from any process from that group.
-	// A failure here leaves the socket owner-only, which fails closed, so it is
-	// only a warning.
+	// On failure the existing group is retained, matching the Envoy socket setup.
 	if err := os.Chown(path, -1, int(d.proxyGID)); err != nil {
 		d.log.Warn("Failed to change the group of the standalone DNS proxy listen socket",
 			logfields.Path, path,

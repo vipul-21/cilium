@@ -81,9 +81,6 @@ const (
 	// EnableStandaloneDNSProxy is the name of the option to enable standalone DNS proxy
 	EnableStandaloneDNSProxy = "enable-standalone-dns-proxy"
 
-	// StandaloneDNSProxyServerPort is the port on which the standalone DNS proxy gRPC server should listen.
-	StandaloneDNSProxyServerPort = "standalone-dns-proxy-server-port"
-
 	// DNSMaxIPsPerRestoredRule defines the maximum number of IPs to maintain
 	// for each FQDN selector in endpoint's restored DNS rules
 	DNSMaxIPsPerRestoredRule = "dns-max-ips-per-restored-rule"
@@ -102,11 +99,6 @@ type FQDNConfig struct {
 	// EnableStandaloneDNSProxy is the option to enable standalone DNS proxy
 	EnableStandaloneDNSProxy bool
 
-	// StandaloneDNSProxyServerPort is deprecated and no longer used. The agent
-	// serves the standalone DNS proxy gRPC API on a Unix domain socket, so that
-	// it is not reachable from the node's network namespace.
-	StandaloneDNSProxyServerPort int
-
 	// ToFQDNsEnableDNSCompression allows the DNS proxy to compress responses to
 	// endpoints that are larger than 512 Bytes or the EDNS0 option, if present.
 	ToFQDNsEnableDNSCompression bool
@@ -123,7 +115,6 @@ type FQDNConfig struct {
 
 var DefaultConfig = FQDNConfig{
 	EnableStandaloneDNSProxy:                 false,
-	StandaloneDNSProxyServerPort:             10095,
 	ToFQDNsEnableDNSCompression:              true,
 	DNSMaxIPsPerRestoredRule:                 1000,
 	DNSProxyConcurrencyProcessingGracePeriod: 0,
@@ -131,8 +122,6 @@ var DefaultConfig = FQDNConfig{
 
 func (def FQDNConfig) Flags(flags *pflag.FlagSet) {
 	flags.Bool(EnableStandaloneDNSProxy, def.EnableStandaloneDNSProxy, "Enables standalone DNS proxy")
-	flags.Int(StandaloneDNSProxyServerPort, def.StandaloneDNSProxyServerPort, "Deprecated, no longer used: the standalone DNS proxy gRPC server listens on a Unix domain socket")
-	flags.MarkDeprecated(StandaloneDNSProxyServerPort, "the standalone DNS proxy gRPC server listens on a Unix domain socket and no longer uses a TCP port")
 	flags.Bool(ToFQDNsEnableDNSCompression, def.ToFQDNsEnableDNSCompression, "Allow the DNS proxy to compress responses to endpoints that are larger than 512 Bytes or the EDNS0 option, if present")
 	flags.Int(DNSMaxIPsPerRestoredRule, def.DNSMaxIPsPerRestoredRule, "Maximum number of IPs to maintain for each restored DNS rule")
 	flags.Duration(DNSProxyConcurrencyProcessingGracePeriod, def.DNSProxyConcurrencyProcessingGracePeriod, "Grace time to wait when DNS proxy concurrent limit has been reached during DNS message processing")

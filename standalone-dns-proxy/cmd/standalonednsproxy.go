@@ -30,11 +30,10 @@ type ReadinessStatusProvider interface {
 type StandaloneDNSProxy struct {
 	logger *slog.Logger
 
-	standaloneDNSProxyServerPort uint16
-	enableL7Proxy                bool
-	enableStandaloneDNSProxy     bool
-	dnsProxier                   proxy.DNSProxier
-	proxyPort                    uint16
+	enableL7Proxy            bool
+	enableStandaloneDNSProxy bool
+	dnsProxier               proxy.DNSProxier
+	proxyPort                uint16
 
 	// connHandler is the gRPC connection handler client for standalone DNS proxy
 	connHandler client.ConnectionHandler
@@ -65,17 +64,16 @@ func (sdp *StandaloneDNSProxy) setReady(ready bool) {
 // NewStandaloneDNSProxy creates a new StandaloneDNSProxy instance
 func NewStandaloneDNSProxy(params standaloneDNSProxyParams) *StandaloneDNSProxy {
 	return &StandaloneDNSProxy{
-		logger:                       params.Logger,
-		enableL7Proxy:                params.AgentConfig.EnableL7Proxy,
-		enableStandaloneDNSProxy:     params.FQDNConfig.EnableStandaloneDNSProxy,
-		standaloneDNSProxyServerPort: uint16(params.FQDNConfig.StandaloneDNSProxyServerPort),
-		proxyPort:                    uint16(params.AgentConfig.ToFQDNsProxyPort),
-		connHandler:                  params.ConnectionHandler,
-		dnsProxier:                   params.DNSProxier,
-		db:                           params.DB,
-		dnsRulesTable:                params.DNSRulesTable,
-		jobGroup:                     params.JobGroup,
-		metrics:                      params.Metrics,
+		logger:                   params.Logger,
+		enableL7Proxy:            params.AgentConfig.EnableL7Proxy,
+		enableStandaloneDNSProxy: params.FQDNConfig.EnableStandaloneDNSProxy,
+		proxyPort:                uint16(params.AgentConfig.ToFQDNsProxyPort),
+		connHandler:              params.ConnectionHandler,
+		dnsProxier:               params.DNSProxier,
+		db:                       params.DB,
+		dnsRulesTable:            params.DNSRulesTable,
+		jobGroup:                 params.JobGroup,
+		metrics:                  params.Metrics,
 	}
 }
 
@@ -97,9 +95,6 @@ func (sdp *StandaloneDNSProxy) StartStandaloneDNSProxy() error {
 		job.WithShutdown()))
 
 	sdp.logger.Info("Standalone DNS proxy started")
-
-	// Mark the proxy as ready since it has started successfully
-	sdp.setReady(true)
 
 	return nil
 }
@@ -123,6 +118,8 @@ func (sdp *StandaloneDNSProxy) WatchConnection(ctx context.Context, _ cell.Healt
 					sdp.metrics.ProxyBootstrapError.Inc()
 					return err
 				}
+				// Keep serving cached state if the agent subsequently disconnects.
+				sdp.setReady(true)
 				return nil
 			}
 		}

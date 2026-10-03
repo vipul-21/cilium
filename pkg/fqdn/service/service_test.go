@@ -130,18 +130,13 @@ func TestFQDNDataServer(t *testing.T) {
 		port                     int
 		enableL7Proxy            bool
 		enableStandaloneDNSProxy bool
-		serverPort               int
 		err                      error
 	}{
 		"Successfully running the server": {
 			port:                     1234,
 			enableL7Proxy:            true,
 			enableStandaloneDNSProxy: true,
-			// Random port for the server should run ideally
-			// but for the test we are using bufconn
-			// which will not use the port
-			serverPort: 40045,
-			err:        nil,
+			err:                      nil,
 		},
 	}
 
@@ -205,7 +200,6 @@ func TestFQDNDataServer(t *testing.T) {
 				h,
 				func(cfg *FQDNConfig) {
 					cfg.EnableStandaloneDNSProxy = tt.enableStandaloneDNSProxy
-					cfg.StandaloneDNSProxyServerPort = tt.serverPort
 				})
 
 			tlog := hivetest.Logger(t)
@@ -260,7 +254,7 @@ func TestFQDNDataServer(t *testing.T) {
 	}
 }
 
-func setupServer(t *testing.T, port int, enableL7Proxy bool, enableStandaloneDNSProxy bool, standaloneDNSProxyServerPort int, lis *bufconn.Listener) (*hive.Hive, *FQDNDataServer) {
+func setupServer(t *testing.T, port int, enableL7Proxy bool, enableStandaloneDNSProxy bool, lis *bufconn.Listener) (*hive.Hive, *FQDNDataServer) {
 
 	var fqdnDataServer *FQDNDataServer
 	h := hive.New(
@@ -321,7 +315,6 @@ func setupServer(t *testing.T, port int, enableL7Proxy bool, enableStandaloneDNS
 		h,
 		func(cfg *FQDNConfig) {
 			cfg.EnableStandaloneDNSProxy = enableStandaloneDNSProxy
-			cfg.StandaloneDNSProxyServerPort = standaloneDNSProxyServerPort
 		})
 	tlog := hivetest.Logger(t)
 	if err := h.Start(tlog, t.Context()); err != nil {
@@ -362,7 +355,7 @@ func addEndpointMapping(t *testing.T, fqdnDataServer *FQDNDataServer) {
 func TestSuccessfullyStreamPolicyState(t *testing.T) {
 	buffer := 1024 * 1024
 	lis := bufconn.Listen(buffer)
-	_, fqdnDataServer := setupServer(t, 1234, true, true, 40045, lis)
+	_, fqdnDataServer := setupServer(t, 1234, true, true, lis)
 
 	conn, err := grpc.NewClient("passthrough://bufnet", grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return lis.Dial()
@@ -460,7 +453,7 @@ func TestSuccessfullyStreamPolicyState(t *testing.T) {
 func TestSuccessfullyStreamPolicyStateOnIdentityToIPsChange(t *testing.T) {
 	buffer := 1024 * 1024
 	lis := bufconn.Listen(buffer)
-	_, fqdnDataServer := setupServer(t, 1234, true, true, 40045, lis)
+	_, fqdnDataServer := setupServer(t, 1234, true, true, lis)
 
 	conn, err := grpc.NewClient("passthrough://bufnet", grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return lis.Dial()
@@ -556,7 +549,7 @@ func TestHandleIPUpsert(t *testing.T) {
 	lis := bufconn.Listen(buffer)
 
 	// create a new server instance
-	_, server := setupServer(t, 1234, true, true, 40045, lis)
+	_, server := setupServer(t, 1234, true, true, lis)
 
 	// Prepare a valid IPv4 (1.2.3.4/32).
 	prefix := netip.MustParsePrefix("1.2.3.4/32")
@@ -653,46 +646,34 @@ func TestHandleIPUpsert(t *testing.T) {
 // TestIsEnabled tests the IsEnabled method of FQDNDataServer
 func TestIsEnabled(t *testing.T) {
 	tests := map[string]struct {
-		enableL7Proxy                bool
-		enableStandaloneDNSProxy     bool
-		standaloneDNSProxyServerPort int
-		toFQDNsProxyPort             int
-		expectedEnabled              bool
+		enableL7Proxy            bool
+		enableStandaloneDNSProxy bool
+		toFQDNsProxyPort         int
+		expectedEnabled          bool
 	}{
 		"Standalone DNS proxy enabled with valid configuration": {
-			enableL7Proxy:                true,
-			enableStandaloneDNSProxy:     true,
-			standaloneDNSProxyServerPort: 40045,
-			toFQDNsProxyPort:             40046,
-			expectedEnabled:              true,
+			enableL7Proxy:            true,
+			enableStandaloneDNSProxy: true,
+			toFQDNsProxyPort:         40046,
+			expectedEnabled:          true,
 		},
 		"Standalone DNS proxy disabled": {
-			enableL7Proxy:                true,
-			enableStandaloneDNSProxy:     false,
-			standaloneDNSProxyServerPort: 40045,
-			toFQDNsProxyPort:             40046,
-			expectedEnabled:              false,
+			enableL7Proxy:            true,
+			enableStandaloneDNSProxy: false,
+			toFQDNsProxyPort:         40046,
+			expectedEnabled:          false,
 		},
 		"L7 proxy disabled": {
-			enableL7Proxy:                false,
-			enableStandaloneDNSProxy:     true,
-			standaloneDNSProxyServerPort: 40045,
-			toFQDNsProxyPort:             40046,
-			expectedEnabled:              false,
-		},
-		"Deprecated standalone DNS proxy server port is ignored": {
-			enableL7Proxy:                true,
-			enableStandaloneDNSProxy:     true,
-			standaloneDNSProxyServerPort: 0,
-			toFQDNsProxyPort:             40046,
-			expectedEnabled:              true,
+			enableL7Proxy:            false,
+			enableStandaloneDNSProxy: true,
+			toFQDNsProxyPort:         40046,
+			expectedEnabled:          false,
 		},
 		"Invalid ToFQDNs proxy port": {
-			enableL7Proxy:                true,
-			enableStandaloneDNSProxy:     true,
-			standaloneDNSProxyServerPort: 40045,
-			toFQDNsProxyPort:             0,
-			expectedEnabled:              false,
+			enableL7Proxy:            true,
+			enableStandaloneDNSProxy: true,
+			toFQDNsProxyPort:         0,
+			expectedEnabled:          false,
 		},
 	}
 
@@ -701,7 +682,7 @@ func TestIsEnabled(t *testing.T) {
 			buffer := 1024 * 1024
 			lis := bufconn.Listen(buffer)
 
-			_, server := setupServer(t, tt.toFQDNsProxyPort, tt.enableL7Proxy, tt.enableStandaloneDNSProxy, tt.standaloneDNSProxyServerPort, lis)
+			_, server := setupServer(t, tt.toFQDNsProxyPort, tt.enableL7Proxy, tt.enableStandaloneDNSProxy, lis)
 
 			enabled := server.IsEnabled()
 			require.Equal(t, tt.expectedEnabled, enabled)
@@ -873,7 +854,7 @@ func TestUpdatePolicyRules(t *testing.T) {
 	// Create fresh server instance
 	buffer := 1024 * 1024
 	lis := bufconn.Listen(buffer)
-	_, server := setupServer(t, 1234, true, true, 40045, lis)
+	_, server := setupServer(t, 1234, true, true, lis)
 
 	// Step 1: Start with empty policy map
 	t.Log("Step 1: Starting with empty policy map")
@@ -935,7 +916,7 @@ func TestUpdatePolicyRules(t *testing.T) {
 func TestUpdateMappingRequest(t *testing.T) {
 	buffer := 1024 * 1024
 	lis := bufconn.Listen(buffer)
-	_, server := setupServer(t, 1234, true, true, 40045, lis)
+	_, server := setupServer(t, 1234, true, true, lis)
 
 	addEndpointMapping(t, server) // Add a valid endpoint mapping for the test
 

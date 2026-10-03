@@ -67,6 +67,15 @@ spec:
           args:
           - --config-dir=/tmp/standalone-dns-proxy/config-map
           imagePullPolicy: {{ .Values.standaloneDnsProxy.image.pullPolicy }}
+          readinessProbe:
+            exec:
+              command:
+              - /usr/bin/standalone-dns-proxy
+              - shell
+              - --
+              - readiness-check
+            periodSeconds: 5
+            timeoutSeconds: 5
           volumeMounts:
           - mountPath: /tmp/standalone-dns-proxy/config-map
             name: standalone-dns-proxy-config-path

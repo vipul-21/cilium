@@ -21,7 +21,6 @@ data:
   enable-standalone-dns-proxy: {{ .Values.standaloneDnsProxy.enabled | quote }}
   enable-ipv4: {{ .Values.ipv4.enabled | quote }}
   enable-ipv6: {{ .Values.ipv6.enabled | quote }}
-  standalone-dns-proxy-server-port: {{ .Values.standaloneDnsProxy.serverPort | quote }}
   # DNS proxy configuration inherited from agent settings
   tofqdns-proxy-port: {{ .Values.dnsProxy.proxyPort | quote }}
   tofqdns-enable-dns-compression: {{ .Values.dnsProxy.enableDnsCompression | quote }}
