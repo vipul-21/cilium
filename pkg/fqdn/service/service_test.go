@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/fqdn"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
@@ -152,7 +153,7 @@ func TestFQDNDataServer(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 
 			h := hive.New(
-				cell.Config(DefaultConfig),
+				fqdnconfig.Cell,
 				cell.Provide(
 					func(logger *slog.Logger) endpointmanager.EndpointsLookup {
 						return endpointmanager.New(logger, nil, &dummyEpSyncher{}, nil, nil, nil, endpointmanager.EndpointManagerConfig{})
@@ -203,7 +204,7 @@ func TestFQDNDataServer(t *testing.T) {
 
 			hive.AddConfigOverride(
 				h,
-				func(cfg *FQDNConfig) {
+				func(cfg *fqdnconfig.Config) {
 					cfg.EnableStandaloneDNSProxy = tt.enableStandaloneDNSProxy
 					cfg.StandaloneDNSProxyServerPort = tt.serverPort
 				})
@@ -267,7 +268,7 @@ func setupServer(t *testing.T, port int, enableL7Proxy bool, enableStandaloneDNS
 		cell.Module(
 			"test-fqdn-grpc-server",
 			"Test FQDN gRPC server",
-			cell.Config(DefaultConfig),
+			fqdnconfig.Cell,
 			cell.Provide(
 				func(logger *slog.Logger) endpointmanager.EndpointsLookup {
 					baseEM := endpointmanager.New(logger, nil, &dummyEpSyncher{}, nil, nil, nil, endpointmanager.EndpointManagerConfig{})
@@ -319,7 +320,7 @@ func setupServer(t *testing.T, port int, enableL7Proxy bool, enableStandaloneDNS
 
 	hive.AddConfigOverride(
 		h,
-		func(cfg *FQDNConfig) {
+		func(cfg *fqdnconfig.Config) {
 			cfg.EnableStandaloneDNSProxy = enableStandaloneDNSProxy
 			cfg.StandaloneDNSProxyServerPort = standaloneDNSProxyServerPort
 		})

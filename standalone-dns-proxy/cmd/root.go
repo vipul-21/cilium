@@ -17,8 +17,8 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/cilium/cilium/pkg/fqdn/bootstrap"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/proxy"
-	"github.com/cilium/cilium/pkg/fqdn/service"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/option"
@@ -63,7 +63,7 @@ var (
 		cell.Provide(func() *option.DaemonConfig {
 			return option.Config
 		}),
-		cell.Config(service.DefaultConfig),
+		fqdnconfig.Cell,
 		cell.Provide(
 			NewStandaloneDNSProxy,
 			NewReadinessStatusProvider,
@@ -129,7 +129,7 @@ type standaloneDNSProxyParams struct {
 
 	Logger            *slog.Logger
 	AgentConfig       *option.DaemonConfig
-	FQDNConfig        service.FQDNConfig
+	FQDNConfig        fqdnconfig.Config
 	JobGroup          job.Group
 	ConnectionHandler client.ConnectionHandler
 	DNSProxier        proxy.DNSProxier

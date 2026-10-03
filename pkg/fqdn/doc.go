@@ -16,6 +16,10 @@
 // Proxy redirection and L3 policy calculations are handled by the datapath and
 // policy layer, respectively.
 //
+// Shared DNS proxy startup settings live in pkg/fqdn/config. The agent and
+// standalone DNS proxy register its configuration cell, and consumers receive
+// the configuration through Hive.
+//
 // DNS data is tracked per-endpoint but collected globally in each cilium-agent
 // when calculating policy. This differs from toEndpoints rules, which use
 // cluster-global information, and toCIDR rules, which use static information

@@ -21,8 +21,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
-	"github.com/cilium/cilium/pkg/fqdn/service"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/rate"
@@ -118,7 +118,7 @@ func setupClientAndServer(t *testing.T) (ConnectionHandler, *mockFqdnDataServer,
 	}()
 
 	h := hive.New(
-		cell.Config(service.DefaultConfig),
+		fqdnconfig.Cell,
 		cell.Provide(newDNSRulesTable),
 		cell.Provide(NewIPtoEndpointTable),
 		cell.Provide(NewPrefixToIdentityTable),

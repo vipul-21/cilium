@@ -7,6 +7,7 @@ import (
 	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/pkg/fqdn/bootstrap"
+	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/lookup"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
@@ -18,6 +19,8 @@ import (
 var Cell = cell.Module(
 	"fqdn",
 	"Cell provides the FQDN proxy controlplane functionality",
+
+	fqdnconfig.Cell,
 
 	// The FQDN NameManager stores DNS mappings.
 	namemanager.Cell,
