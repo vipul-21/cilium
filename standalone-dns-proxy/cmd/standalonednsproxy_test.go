@@ -95,7 +95,6 @@ func setupTestEnv(t *testing.T) *StandaloneDNSProxy {
 		h,
 		func(cfg *service.FQDNConfig) {
 			cfg.EnableStandaloneDNSProxy = true
-			cfg.StandaloneDNSProxyServerPort = 1000
 		})
 	tlog := hivetest.Logger(t)
 	if err := h.Start(tlog, t.Context()); err != nil {

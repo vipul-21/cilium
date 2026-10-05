@@ -705,7 +705,6 @@ data:
 {{- if hasKey .Values "standaloneDnsProxy" }}
   {{- if .Values.standaloneDnsProxy.enabled }}
   enable-standalone-dns-proxy: {{ .Values.standaloneDnsProxy.enabled | quote }}
-  standalone-dns-proxy-server-port: {{ .Values.standaloneDnsProxy.serverPort | quote }}
   {{- end }}
 {{- end }}
 

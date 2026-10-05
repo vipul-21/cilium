@@ -6556,9 +6556,6 @@
         "rollOutPods": {
           "type": "boolean"
         },
-        "serverPort": {
-          "type": "integer"
-        },
         "tolerations": {
           "items": {},
           "type": "array"

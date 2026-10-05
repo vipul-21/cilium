@@ -20,7 +20,8 @@ The load of DNS request is shared between both proxies.
 Overview
 ========
 
-The Standalone DNS Proxy communicates with the Cilium agent via gRPC to:
+The Standalone DNS Proxy communicates with the Cilium agent via gRPC over a Unix
+domain socket to:
 
 1. Receive DNS policy rules from the agent
 2. Report DNS query results for policy enforcement to the agent
@@ -40,7 +41,6 @@ To enable the Standalone DNS Proxy, set the following Helm values:
    # Enable standalone DNS proxy
    standaloneDnsProxy:
      enabled: true
-     serverPort: 10095 # Must be non-zero when using standalone DNS proxy, choosing 10095 as example
 
 .. important::
 
@@ -51,6 +51,84 @@ To enable the Standalone DNS Proxy, set the following Helm values:
      the same defaults as the agent (default: true)
    
    The Helm chart will fail validation if ``proxyPort`` is not configured correctly.
+
+The control-plane socket is
+``/var/run/cilium/standalone-dns-proxy/sockets/sdp.sock`` inside the proxy container.
+The Helm chart mounts the corresponding directory below ``daemon.runPath`` on the
+host. Kubernetes creates the directory if it is absent; the agent also creates
+it when starting the gRPC server. The agent sets the directory to mode ``0750``
+and the socket to mode ``0660``, using its configured ``proxy-gid``.
+
+The proxy waits for its initial connection and DNS listener before reporting
+ready. A missing socket during agent startup is retried; there is no fallback
+to TCP. After startup, an agent disconnection does not make the proxy unready:
+it can continue serving cached state, subject to the limitations below.
+
+.. _standalone_dns_proxy_upgrade:
+
+Upgrading from TCP and rolling back
+==================================
+
+The ``standaloneDnsProxy.serverPort`` Helm value and
+``--standalone-dns-proxy-server-port`` CLI option have been removed. Remove them
+from the target version's values, configuration files, environment, and command
+lines. The DNS traffic port, ``dnsProxy.proxyPort``, is still required.
+
+.. warning::
+
+   TCP-based and Unix-socket-based versions cannot communicate with each other.
+   Do not roll out only one component or upgrade the standalone proxy image
+   without its updated Helm chart and socket mount.
+
+   Use the in-agent DNS proxy during the transition below. Standalone DNS
+   redundancy is temporarily unavailable, so agent restarts during this window
+   can interrupt DNS. This procedure is not a zero-downtime upgrade.
+
+Keep the currently installed and target charts available as ``OLD_CHART`` and
+``NEW_CHART``. Prepare separate ``old-values.yaml`` and ``new-values.yaml`` files
+with the configuration for each version, including matching agent and standalone
+proxy images. Keep ``l7Proxy=true`` and the same non-zero ``dnsProxy.proxyPort``
+throughout the transition. The commands below assume release ``cilium`` in
+namespace ``kube-system``.
+
+#. Disable the standalone proxy using the currently installed chart. Confirm
+   that its pods have terminated and that workload DNS still works through the
+   in-agent proxy before proceeding:
+
+   .. code-block:: shell-session
+
+      $ helm upgrade cilium "$OLD_CHART" -n kube-system --reset-values \
+          -f old-values.yaml --set standaloneDnsProxy.enabled=false --wait
+      $ kubectl -n kube-system get pods -l k8s-app=standalone-dns-proxy
+
+#. Upgrade the agent with standalone DNS still disabled:
+
+   .. code-block:: shell-session
+
+      $ helm upgrade cilium "$NEW_CHART" -n kube-system --reset-values \
+          -f new-values.yaml --set standaloneDnsProxy.enabled=false --wait
+      $ kubectl -n kube-system rollout status daemonset/cilium
+
+#. Enable the matching standalone proxy and restart the agent to activate its
+   gRPC server. Do not use Helm's ``--wait`` before this restart: the standalone
+   proxy must remain unready until the agent starts the socket service.
+
+   .. code-block:: shell-session
+
+      $ helm upgrade cilium "$NEW_CHART" -n kube-system --reset-values \
+          -f new-values.yaml --set standaloneDnsProxy.enabled=true
+      $ kubectl -n kube-system rollout restart daemonset/cilium
+      $ kubectl -n kube-system rollout status daemonset/cilium
+      $ kubectl -n kube-system rollout status daemonset/standalone-dns-proxy
+
+#. Verify allowed and denied DNS queries from workloads before relying on the
+   standalone proxy for agent-outage resilience.
+
+For rollback to a TCP-based version, repeat the same sequence with the charts
+and values files reversed: disable standalone DNS first, restore the older agent,
+then re-enable its matching standalone proxy and restart the agent. Keep the
+older version's control-port setting in its own values file. Do not roll back
+directly to a revision that enables an incompatible standalone proxy.
 
 Testing the Standalone DNS Proxy
 =================================

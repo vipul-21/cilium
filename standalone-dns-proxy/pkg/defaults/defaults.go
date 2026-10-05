@@ -9,6 +9,11 @@ const (
 	// regardless of Cilium's state.
 	RuntimePath = "/var/run/standalone-dns-proxy"
 
+	// CiliumRuntimePath is the path at which Cilium's runtime directory is mounted
+	// into the standalone DNS proxy. It is used to reach the agent's FQDNData gRPC
+	// socket, and must match the agent's --state-dir (Helm: daemon.runPath).
+	CiliumRuntimePath = "/var/run/cilium"
+
 	// ShellSockPath is the path to the UNIX domain socket exposing the debug shell
 	ShellSockPath = RuntimePath + "/shell.sock"
 )
