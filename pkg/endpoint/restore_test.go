@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	fqdnrestore "github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/labels"
@@ -33,7 +33,7 @@ import (
 
 func TestFQDNConfigCreateAndRestore(t *testing.T) {
 	logger := hivetest.Logger(t)
-	cfg := fqdnconfig.DefaultConfig
+	cfg := config.DefaultConfig
 	cfg.ToFQDNsMinTTL = 30
 	cfg.ToFQDNsMaxIPsPerHost = 2
 	cfg.ToFQDNsMaxDeferredConnectionDeletes = 7
@@ -66,7 +66,7 @@ func TestFQDNConfigCreateAndRestore(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		ep   *Endpoint
-		cfg  fqdnconfig.Config
+		cfg  config.Config
 	}{
 		{"fresh", fresh, cfg},
 		{"restored", restored, restoreCfg},

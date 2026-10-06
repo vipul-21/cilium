@@ -33,7 +33,7 @@ import (
 	clustermeshTypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/command"
 	"github.com/cilium/cilium/pkg/defaults"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/ip"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/kpr"
@@ -3105,7 +3105,7 @@ var backupFileNames []string = []string{
 // StoreInFile stores the daemon and FQDN configuration in 'agent-runtime-config.json'.
 // Previous snapshots are backed up in the given directory.
 // Caller is responsible for blocking concurrent changes.
-func (c *DaemonConfig) StoreInFile(logger *slog.Logger, dir string, fqdnConfig fqdnconfig.Config) error {
+func (c *DaemonConfig) StoreInFile(logger *slog.Logger, dir string, fqdnConfig config.Config) error {
 	backupFiles(logger, dir, backupFileNames)
 	f, err := os.Create(backupFileNames[0])
 	if err != nil {
@@ -3117,7 +3117,7 @@ func (c *DaemonConfig) StoreInFile(logger *slog.Logger, dir string, fqdnConfig f
 
 	err = e.Encode(struct {
 		*DaemonConfig
-		fqdnconfig.Config
+		config.Config
 	}{c, fqdnConfig})
 	c.shaSum = c.checksum()
 

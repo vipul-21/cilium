@@ -20,7 +20,7 @@ import (
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dns"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ip"
@@ -50,7 +50,7 @@ var (
 func TestNameManagerLockConfig(t *testing.T) {
 	for _, count := range []int{3, 7} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
-			cfg := fqdnconfig.DefaultConfig
+			cfg := config.DefaultConfig
 			cfg.DNSProxyLockCount = count
 			manager := New(ManagerParams{
 				Logger:     hivetest.Logger(t),
@@ -71,7 +71,7 @@ func TestMapIPsToSelectors(t *testing.T) {
 		ciliumIP2   = netip.MustParseAddr("1.2.3.5")
 		nameManager = New(ManagerParams{
 			Logger: logger,
-			FQDNConfig: fqdnconfig.Config{
+			FQDNConfig: config.Config{
 				ToFQDNsMinTTL: 1,
 			},
 		})
@@ -160,9 +160,9 @@ func TestNameManagerIPCacheUpdates(t *testing.T) {
 		Config: NameManagerConfig{
 			StateDir: option.Config.StateDir,
 		},
-		FQDNConfig: fqdnconfig.Config{
+		FQDNConfig: config.Config{
 			ToFQDNsMinTTL:     1,
-			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+			DNSProxyLockCount: config.DefaultConfig.DNSProxyLockCount,
 		},
 		IPCache: ipc,
 	})
@@ -277,9 +277,9 @@ func TestNameManagerGCConsistency(t *testing.T) {
 		Config: NameManagerConfig{
 			StateDir: option.Config.StateDir,
 		},
-		FQDNConfig: fqdnconfig.Config{
+		FQDNConfig: config.Config{
 			ToFQDNsMinTTL:     1,
-			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+			DNSProxyLockCount: config.DefaultConfig.DNSProxyLockCount,
 		},
 		EPMgr:   &epMgr,
 		IPCache: ipc,

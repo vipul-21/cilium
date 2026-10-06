@@ -19,7 +19,7 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dns"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
@@ -53,7 +53,7 @@ func (m *deadlineNameManager) UpdateGenerateDNS(ctx context.Context, _ time.Time
 func TestResponseDeadlineConfig(t *testing.T) {
 	for _, delay := range []time.Duration{100 * time.Millisecond, 2 * time.Second} {
 		t.Run(delay.String(), func(t *testing.T) {
-			cfg := fqdnconfig.DefaultConfig
+			cfg := config.DefaultConfig
 			cfg.FQDNProxyResponseMaxDelay = delay
 			manager := &deadlineNameManager{}
 			handler := NewDNSMessageHandler(DNSMessageHandlerParams{
@@ -132,9 +132,9 @@ func BenchmarkNotifyOnDNSMsg(b *testing.B) {
 		Config: namemanager.NameManagerConfig{
 			StateDir: defaults.StateDir,
 		},
-		FQDNConfig: fqdnconfig.Config{
+		FQDNConfig: config.Config{
 			ToFQDNsMinTTL:     1,
-			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+			DNSProxyLockCount: config.DefaultConfig.DNSProxyLockCount,
 		},
 		IPCache:    ipc,
 		PolicyRepo: policyRepo,
@@ -145,7 +145,7 @@ func BenchmarkNotifyOnDNSMsg(b *testing.B) {
 	handler := NewDNSMessageHandler(
 		DNSMessageHandlerParams{
 			Logger:            logger,
-			Config:            fqdnconfig.DefaultConfig,
+			Config:            config.DefaultConfig,
 			NameManager:       nm,
 			ProxyAccessLogger: accesslog.NewProxyAccessLogger(logger, accesslog.ProxyAccessLoggerConfig{}, &noopNotifier{}, &dummyInfoRegistry{}, node.NewTestLocalNodeStore(node.LocalNode{})),
 		})

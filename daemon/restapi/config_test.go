@@ -13,7 +13,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	"github.com/cilium/cilium/pkg/defaults"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/option"
 	fakewireguard "github.com/cilium/cilium/pkg/wireguard/fake"
 	wgTypes "github.com/cilium/cilium/pkg/wireguard/types"
@@ -34,7 +34,7 @@ func TestReservedPortsConfig(t *testing.T) {
 			handler := getConfigHandler{
 				logger:       hivetest.Logger(t),
 				daemonConfig: &option.DaemonConfig{ContainerIPLocalReservedPorts: tt.reserved},
-				fqdnConfig:   fqdnconfig.Config{DNSProxyEnableTransparentMode: tt.transparent},
+				fqdnConfig:   config.Config{DNSProxyEnableTransparentMode: tt.transparent},
 				wgConfig:     fakewireguard.Config{EnableWireguard: true},
 				tunnelConfig: tunnel.NewTestConfig(tunnel.Disabled),
 			}
@@ -44,7 +44,7 @@ func TestReservedPortsConfig(t *testing.T) {
 }
 
 func TestGetConfigMap(t *testing.T) {
-	cfg := fqdnconfig.DefaultConfig
+	cfg := config.DefaultConfig
 	cfg.StandaloneDNSProxyServerPort = 11095
 	cfg.ToFQDNsEnableDNSCompression = false
 	handler := getConfigHandler{

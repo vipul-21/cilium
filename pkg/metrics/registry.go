@@ -22,7 +22,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/spf13/pflag"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	metricpkg "github.com/cilium/cilium/pkg/metrics/metric"
@@ -57,7 +57,7 @@ type RegistryParams struct {
 	Config      RegistryConfig
 
 	// Non-agent binaries also use the registry, without an FQDN subsystem.
-	FQDNConfig fqdnconfig.Config `optional:"true"`
+	FQDNConfig config.Config `optional:"true"`
 }
 
 // Registry is a cell around a prometheus registry. This registry starts an HTTP server as part of its lifecycle

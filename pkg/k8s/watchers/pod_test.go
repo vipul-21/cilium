@@ -19,7 +19,7 @@ import (
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	fakeipsec "github.com/cilium/cilium/pkg/datapath/linux/ipsec/fake"
 	"github.com/cilium/cilium/pkg/endpoint"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/ipcache"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
@@ -558,7 +558,7 @@ func TestReplaceK8sPodV1ReconcilesEndpointLabels(t *testing.T) {
 	)
 	state := models.EndpointStateWaitingDashForDashIdentity
 	ep, err := endpoint.NewEndpointFromChangeModel(endpoint.EndpointParams{
-		FQDNConfig: fqdnconfig.DefaultConfig,
+		FQDNConfig: config.DefaultConfig,
 		Logger:     logger,
 		PolicyRepo: repo,
 	}, nil, nil, &models.EndpointChangeRequest{State: &state}, nil)

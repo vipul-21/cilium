@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
@@ -314,7 +314,7 @@ func unloadDNSPolicies(params daemonParams) {
 		if !needsPolicyRegen {
 			params.Logger.Info(
 				"No policy recalculation needed to remove DNS rules due to option",
-				logfields.Option, fqdnconfig.DNSPolicyUnloadOnShutdown,
+				logfields.Option, config.DNSPolicyUnloadOnShutdown,
 			)
 			return
 		}
@@ -322,7 +322,7 @@ func unloadDNSPolicies(params daemonParams) {
 		// Bump revision to trigger policy recalculation
 		params.Logger.Info(
 			"Triggering policy recalculation to remove DNS rules due to option",
-			logfields.Option, fqdnconfig.DNSPolicyUnloadOnShutdown,
+			logfields.Option, config.DNSPolicyUnloadOnShutdown,
 		)
 		regenerationMetadata := &regeneration.ExternalRegenerationMetadata{
 			Reason:            regeneration.ReasonDaemonConfigUpdate,

@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/defaults"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/util"
 )
@@ -1212,14 +1212,14 @@ func TestDaemonConfig_StoreInFile(t *testing.T) {
 	assert.False(t, Config.Opts.IsEnabled("unit-test-key-only")) // make sure not used
 	Config.Opts.SetBool("unit-test-key-only", true)
 
-	fqdnConfig := fqdnconfig.DefaultConfig
+	fqdnConfig := config.DefaultConfig
 	fqdnConfig.DNSMaxIPsPerRestoredRule = 42
 	err := Config.StoreInFile(logger, ".", fqdnConfig)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(backupFileNames[0])
 	require.NoError(t, err)
-	var stored fqdnconfig.Config
+	var stored config.Config
 	require.NoError(t, json.Unmarshal(data, &stored))
 	require.Equal(t, fqdnConfig, stored)
 

@@ -34,7 +34,7 @@ import (
 	fakeipsec "github.com/cilium/cilium/pkg/datapath/linux/ipsec/fake"
 	"github.com/cilium/cilium/pkg/endpoint"
 	endpointtypes "github.com/cilium/cilium/pkg/endpoint/types"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	fqdndns "github.com/cilium/cilium/pkg/fqdn/dns"
 	"github.com/cilium/cilium/pkg/fqdn/proxy/ipfamily"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
@@ -75,7 +75,7 @@ func TestConcurrencyLimitConfig(t *testing.T) {
 			t.Run(fmt.Sprintf("%d/%s", limit, grace), func(t *testing.T) {
 				proxy := NewDNSProxy(DNSProxyConfig{
 					Logger: hivetest.Logger(t),
-					Config: fqdnconfig.Config{
+					Config: config.Config{
 						DNSProxyConcurrencyLimit:                 limit,
 						DNSProxyConcurrencyProcessingGracePeriod: grace,
 					},
@@ -111,9 +111,9 @@ func TestRejectReplyConfig(t *testing.T) {
 		response string
 		want     int
 	}{
-		{fqdnconfig.FQDNProxyDenyWithNameError, dns.RcodeNameError},
+		{config.FQDNProxyDenyWithNameError, dns.RcodeNameError},
 		{"NAMEERROR", dns.RcodeNameError},
-		{fqdnconfig.FQDNProxyDenyWithRefused, dns.RcodeRefused},
+		{config.FQDNProxyDenyWithRefused, dns.RcodeRefused},
 		{"REFUSED", dns.RcodeRefused},
 		{"", dns.RcodeRefused},
 		{"invalid", dns.RcodeRefused},
@@ -121,7 +121,7 @@ func TestRejectReplyConfig(t *testing.T) {
 		t.Run(tt.response, func(t *testing.T) {
 			proxy := NewDNSProxy(DNSProxyConfig{
 				Logger: hivetest.Logger(t),
-				Config: fqdnconfig.Config{FQDNRejectResponse: tt.response},
+				Config: config.Config{FQDNRejectResponse: tt.response},
 			}, nil, nil)
 			require.Equal(t, tt.want, proxy.rejectReply)
 		})
@@ -143,7 +143,7 @@ func TestPrivilegedSocketConfig(t *testing.T) {
 					fd, err := unix.Socket(family.domain, unix.SOCK_STREAM, 0)
 					require.NoError(t, err)
 					t.Cleanup(func() { require.NoError(t, unix.Close(fd)) })
-					proxy := NewDNSProxy(DNSProxyConfig{Config: fqdnconfig.Config{
+					proxy := NewDNSProxy(DNSProxyConfig{Config: config.Config{
 						DNSProxyEnableTransparentMode: transparent,
 						DNSProxySocketLingerTimeout:   linger,
 					}}, nil, nil)
@@ -165,10 +165,10 @@ func TestPrivilegedSocketConfig(t *testing.T) {
 }
 
 func setupDNSProxyTestSuite(tb testing.TB) *DNSProxyTestSuite {
-	return setupDNSProxyTestSuiteWithConfig(tb, fqdnconfig.DefaultConfig)
+	return setupDNSProxyTestSuiteWithConfig(tb, config.DefaultConfig)
 }
 
-func setupDNSProxyTestSuiteWithConfig(tb testing.TB, cfg fqdnconfig.Config) *DNSProxyTestSuite {
+func setupDNSProxyTestSuiteWithConfig(tb testing.TB, cfg config.Config) *DNSProxyTestSuite {
 	testutils.PrivilegedTest(tb)
 	logger := hivetest.Logger(tb)
 
@@ -270,7 +270,7 @@ func (s *DNSProxyTestSuite) LookupByIdentity(nid identity.NumericIdentity) []str
 
 func makeProxyTestEndpointParams(logger *slog.Logger, repo policy.PolicyRepository, fetcher compute.PolicyRecomputer) endpoint.EndpointParams {
 	return endpoint.EndpointParams{
-		FQDNConfig:      fqdnconfig.DefaultConfig,
+		FQDNConfig:      config.DefaultConfig,
 		Logger:          logger,
 		EPBuildQueue:    &endpoint.MockEndpointBuildQueue{},
 		PolicyRepo:      repo,
@@ -469,8 +469,8 @@ func (s *DNSProxyTestSuite) requestRejectNonMatchingRefusedResponse(t *testing.T
 
 func TestPrivilegedRejectNonMatchingRefusedResponseWithNameError(t *testing.T) {
 	// reject a query with NXDomain
-	cfg := fqdnconfig.DefaultConfig
-	cfg.FQDNRejectResponse = fqdnconfig.FQDNProxyDenyWithNameError
+	cfg := config.DefaultConfig
+	cfg.FQDNRejectResponse = config.FQDNProxyDenyWithNameError
 	s := setupDNSProxyTestSuiteWithConfig(t, cfg)
 
 	request := s.requestRejectNonMatchingRefusedResponse(t)
@@ -482,8 +482,8 @@ func TestPrivilegedRejectNonMatchingRefusedResponseWithNameError(t *testing.T) {
 
 func TestPrivilegedRejectNonMatchingRefusedResponseWithRefused(t *testing.T) {
 	// reject a query with Refused
-	cfg := fqdnconfig.DefaultConfig
-	cfg.FQDNRejectResponse = fqdnconfig.FQDNProxyDenyWithRefused
+	cfg := config.DefaultConfig
+	cfg.FQDNRejectResponse = config.FQDNProxyDenyWithRefused
 	s := setupDNSProxyTestSuiteWithConfig(t, cfg)
 
 	request := s.requestRejectNonMatchingRefusedResponse(t)

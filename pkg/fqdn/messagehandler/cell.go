@@ -8,7 +8,7 @@ import (
 
 	"github.com/cilium/hive/cell"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
 	"github.com/cilium/cilium/pkg/proxy/accesslog"
 )
@@ -29,7 +29,7 @@ type DNSMessageHandlerParams struct {
 
 	Lifecycle         cell.Lifecycle
 	Logger            *slog.Logger
-	Config            fqdnconfig.Config
+	Config            config.Config
 	NameManager       namemanager.NameManager
 	ProxyAccessLogger accesslog.ProxyAccessLogger
 }

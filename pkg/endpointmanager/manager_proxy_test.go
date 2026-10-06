@@ -21,7 +21,7 @@ import (
 	fakeendpoint "github.com/cilium/cilium/pkg/endpoint/fake"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	envoypolicy "github.com/cilium/cilium/pkg/envoy/policy"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -263,7 +263,7 @@ func newUpdatePolicyMapsTestEndpoint(t *testing.T, mgr *endpointManager, repo po
 
 	model := newTestEndpointModel(modelID, endpoint.StateWaitingForIdentity)
 	ep, err := endpoint.NewEndpointFromChangeModel(endpoint.EndpointParams{
-		FQDNConfig:      fqdnconfig.DefaultConfig,
+		FQDNConfig:      config.DefaultConfig,
 		Logger:          hivetest.Logger(t),
 		EPBuildQueue:    &endpoint.MockEndpointBuildQueue{},
 		Orchestrator:    &fakeendpoint.FakeOrchestrator{},

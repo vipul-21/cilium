@@ -13,7 +13,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointstate"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -28,7 +28,7 @@ type fqdnProxyBootstrapperParams struct {
 	JobGroup   job.Group
 	Lifecycle  cell.Lifecycle
 	Logger     *slog.Logger
-	FQDNConfig fqdnconfig.Config
+	FQDNConfig config.Config
 
 	ProxyPorts        *proxyports.ProxyPorts
 	DNSProxy          proxy.DNSProxier
@@ -38,7 +38,7 @@ type fqdnProxyBootstrapperParams struct {
 
 type fqdnProxyBootstrapper struct {
 	logger *slog.Logger
-	config fqdnconfig.Config
+	config config.Config
 
 	proxy      proxy.DNSProxier
 	proxyPorts *proxyports.ProxyPorts

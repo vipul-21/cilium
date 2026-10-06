@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/ip"
 )
 
@@ -651,7 +651,7 @@ func TestZombiesSiblingsGC(t *testing.T) {
 	logger := hivetest.Logger(t)
 
 	now := time.Now()
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 
 	// Siblings are IPs that resolve to the same name.
 	zombies.Upsert(now, netip.MustParseAddr("1.1.1.1"), "test.com")
@@ -681,7 +681,7 @@ func TestZombiesGC(t *testing.T) {
 	logger := hivetest.Logger(t)
 
 	now := time.Now()
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 
 	zombies.Upsert(now, netip.MustParseAddr("1.1.1.1"), "test.com")
 	zombies.Upsert(now, netip.MustParseAddr("2.2.2.2"), "somethingelse.com")
@@ -782,7 +782,7 @@ func TestZombiesGCOverLimit(t *testing.T) {
 	logger := hivetest.Logger(t)
 
 	now := time.Now()
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, 1, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, 1, 0)
 
 	// Limit the total number of IPs to be associated with a specific host
 	// to 1, but associate 'test.com' with multiple IPs.
@@ -810,7 +810,7 @@ func TestZombiesGCOverLimitWithCTGC(t *testing.T) {
 	now := time.Now()
 	afterNow := now.Add(1 * time.Nanosecond)
 	maxConnections := 3
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, maxConnections, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, maxConnections, 0)
 	zombies.SetCTGCTime(now, afterNow)
 
 	// Limit the number of IPs per hostname, but associate 'test.com' with
@@ -845,7 +845,7 @@ func TestZombiesGCDeferredDeletes(t *testing.T) {
 	logger := hivetest.Logger(t)
 
 	now := time.Now()
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 
 	zombies.Upsert(now.Add(0*time.Second), netip.MustParseAddr("1.1.1.1"), "test.com")
 	zombies.Upsert(now.Add(1*time.Second), netip.MustParseAddr("2.2.2.2"), "somethingelse.com")
@@ -860,7 +860,7 @@ func TestZombiesGCDeferredDeletes(t *testing.T) {
 		"3.3.3.3": {"onemorething.com"},
 	})
 
-	zombies = NewDNSZombieMappings(logger, 2, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+	zombies = NewDNSZombieMappings(logger, 2, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 	zombies.Upsert(now.Add(0*time.Second), netip.MustParseAddr("1.1.1.1"), "test.com")
 
 	// No zombies should be evicted because we are below the limit
@@ -906,7 +906,7 @@ func TestZombiesForceExpire(t *testing.T) {
 	logger := hivetest.Logger(t)
 
 	now := time.Now()
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 
 	zombies.Upsert(now, netip.MustParseAddr("1.1.1.1"), "test.com", "anothertest.com")
 	zombies.Upsert(now, netip.MustParseAddr("2.2.2.2"), "somethingelse.com")
@@ -979,7 +979,7 @@ func TestCacheToZombiesGCCascade(t *testing.T) {
 
 	now := time.Now()
 	cache := NewDNSCache(0)
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 
 	// Add entries that should expire at different times
 	cache.Update(now, "test.com", []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2")}, 3)
@@ -1025,7 +1025,7 @@ func TestZombiesDumpAlive(t *testing.T) {
 	logger := hivetest.Logger(t)
 
 	now := time.Now()
-	zombies := NewDNSZombieMappings(logger, fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+	zombies := NewDNSZombieMappings(logger, config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 
 	alive := zombies.DumpAlive(nil)
 	require.Empty(t, alive)
@@ -1510,7 +1510,7 @@ func TestZombieNamesSerialize(t *testing.T) {
 	// Decoding what this revision writes with that shape catches the set
 	// leaking onto the wire as an object.
 	t.Run("previous release can decode", func(t *testing.T) {
-		zombies := NewDNSZombieMappings(hivetest.Logger(t), fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+		zombies := NewDNSZombieMappings(hivetest.Logger(t), config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 		zombies.Upsert(time.Unix(2, 0).UTC(), zombie.IP, "zeta.example.com", "alpha.example.com")
 
 		raw, err := json.Marshal(zombies)
@@ -1556,13 +1556,13 @@ func TestZombieNamesDeserialize(t *testing.T) {
 	t.Run("without names", func(t *testing.T) {
 		ip := netip.MustParseAddr("10.0.0.3")
 
-		src := NewDNSZombieMappings(hivetest.Logger(t), fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+		src := NewDNSZombieMappings(hivetest.Logger(t), config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 		src.Upsert(time.Unix(4, 0).UTC(), ip)
 		raw, err := json.Marshal(src)
 		require.NoError(t, err)
 		require.NotContains(t, string(raw), `"names"`, "a nameless zombie must omit the field")
 
-		restored := NewDNSZombieMappings(hivetest.Logger(t), fqdnconfig.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, fqdnconfig.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
+		restored := NewDNSZombieMappings(hivetest.Logger(t), config.DefaultConfig.ToFQDNsMaxDeferredConnectionDeletes, config.DefaultConfig.ToFQDNsMaxIPsPerHost, 0)
 		require.NoError(t, json.Unmarshal(raw, restored))
 
 		require.NotPanics(t, func() {

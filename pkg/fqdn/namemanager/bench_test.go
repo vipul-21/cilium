@@ -15,7 +15,7 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dns"
 	"github.com/cilium/cilium/pkg/policy/api"
 	testipcache "github.com/cilium/cilium/pkg/testutils/ipcache"
@@ -46,9 +46,9 @@ func BenchmarkUpdateGenerateDNS(b *testing.B) {
 		Config: NameManagerConfig{
 			StateDir: defaults.StateDir,
 		},
-		FQDNConfig: fqdnconfig.Config{
+		FQDNConfig: config.Config{
 			ToFQDNsMinTTL:     1,
-			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+			DNSProxyLockCount: config.DefaultConfig.DNSProxyLockCount,
 		},
 		IPCache: testipcache.NewMockIPCache(),
 	})
@@ -110,9 +110,9 @@ func BenchmarkFqdnCache(b *testing.B) {
 		Config: NameManagerConfig{
 			StateDir: defaults.StateDir,
 		},
-		FQDNConfig: fqdnconfig.Config{
+		FQDNConfig: config.Config{
 			ToFQDNsMinTTL:     1,
-			DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+			DNSProxyLockCount: config.DefaultConfig.DNSProxyLockCount,
 		},
 		IPCache: testipcache.NewMockIPCache(),
 		EPMgr:   &epMgrMock{logger, caches},

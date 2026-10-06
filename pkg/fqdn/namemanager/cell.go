@@ -15,7 +15,7 @@ import (
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/fqdn"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/option"
@@ -59,7 +59,7 @@ type ManagerParams struct {
 	PolicyRepo      policy.PolicyRepository
 	Logger          *slog.Logger
 	Config          NameManagerConfig
-	FQDNConfig      fqdnconfig.Config
+	FQDNConfig      config.Config
 	IPCache         ipc
 	EPMgr           endpoints
 	RestorerPromise promise.Promise[endpointstate.Restorer]

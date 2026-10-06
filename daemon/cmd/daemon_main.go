@@ -37,7 +37,7 @@ import (
 	"github.com/cilium/cilium/pkg/envoy"
 	util "github.com/cilium/cilium/pkg/envoy/util"
 	"github.com/cilium/cilium/pkg/flowdebug"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/identity"
 	identitycell "github.com/cilium/cilium/pkg/identity/cache/cell"
@@ -1106,7 +1106,7 @@ type daemonConfigParams struct {
 
 	CfgResolver  promise.Resolver[*option.DaemonConfig]
 	DaemonConfig *option.DaemonConfig
-	FQDNConfig   fqdnconfig.Config
+	FQDNConfig   config.Config
 
 	Logger    *slog.Logger
 	Lifecycle cell.Lifecycle
@@ -1125,7 +1125,7 @@ type daemonParams struct {
 	// Ensures that the legacy daemon config initialization is executed
 	legacy.DaemonConfigInitialization
 	DaemonConfig *option.DaemonConfig
-	FQDNConfig   fqdnconfig.Config
+	FQDNConfig   config.Config
 
 	Logger    *slog.Logger
 	Lifecycle cell.Lifecycle

@@ -10,7 +10,7 @@ import (
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
 
 	"github.com/cilium/cilium/pkg/defaults"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/policy/api"
 )
 
@@ -24,9 +24,9 @@ func FuzzMapSelectorsToNamesLocked(f *testing.F) {
 			Config: NameManagerConfig{
 				StateDir: defaults.StateDir,
 			},
-			FQDNConfig: fqdnconfig.Config{
+			FQDNConfig: config.Config{
 				ToFQDNsMinTTL:     1,
-				DNSProxyLockCount: fqdnconfig.DefaultConfig.DNSProxyLockCount,
+				DNSProxyLockCount: config.DefaultConfig.DNSProxyLockCount,
 			},
 		})
 		nameManager.mapSelectorsToNamesLocked(fqdnSelector)

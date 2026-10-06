@@ -10,7 +10,7 @@ import (
 	"github.com/cilium/hive/job"
 	"github.com/cilium/statedb"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/time"
@@ -41,7 +41,7 @@ type clientParams struct {
 
 	Logger                *slog.Logger
 	JobGroup              job.Group
-	FQDNConfig            fqdnconfig.Config
+	FQDNConfig            config.Config
 	DialClient            dialClient
 	DB                    *statedb.DB
 	DNSRulesTable         statedb.RWTable[DNSRules]

@@ -22,7 +22,7 @@ import (
 	fakeipsec "github.com/cilium/cilium/pkg/datapath/linux/ipsec/fake"
 	"github.com/cilium/cilium/pkg/endpoint"
 	endpointid "github.com/cilium/cilium/pkg/endpoint/id"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/kvstore"
@@ -40,7 +40,7 @@ import (
 
 func makeTestEndpointParams(logger *slog.Logger, s *EndpointManagerSuite) endpoint.EndpointParams {
 	return endpoint.EndpointParams{
-		FQDNConfig:          fqdnconfig.DefaultConfig,
+		FQDNConfig:          config.DefaultConfig,
 		Logger:              logger,
 		EPBuildQueue:        &endpoint.MockEndpointBuildQueue{},
 		PolicyRepo:          s.repo,

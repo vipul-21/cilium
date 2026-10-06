@@ -38,7 +38,7 @@ import (
 	endpoint "github.com/cilium/cilium/pkg/endpoint/types"
 	"github.com/cilium/cilium/pkg/eventqueue"
 	"github.com/cilium/cilium/pkg/fqdn"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
@@ -148,7 +148,7 @@ type Endpoint struct {
 	identityManager  identitymanager.IDManager
 	monitorAgent     monitoragent.Agent
 	wgConfig         wgTypes.Config
-	fqdnConfig       fqdnconfig.Config
+	fqdnConfig       config.Config
 	ipsecConfig      ipsec.Config
 	lxcMap           lxcmap.Map
 	localNodeStore   node.NodeGetter

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/fqdn/bootstrap"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
 	"github.com/cilium/cilium/pkg/hive"
@@ -55,7 +55,7 @@ func TestStandaloneDNSProxy(t *testing.T) {
 
 	hive.AddConfigOverride(
 		h,
-		func(cfg *fqdnconfig.Config) {
+		func(cfg *config.Config) {
 			cfg.EnableStandaloneDNSProxy = true
 		})
 
@@ -70,7 +70,7 @@ func setupTestEnv(t *testing.T) *StandaloneDNSProxy {
 		cell.Module(
 			"test-standalone-dns-proxy",
 			"Test standalone DNS proxy",
-			fqdnconfig.StandaloneCell,
+			config.StandaloneCell,
 			client.Cell,
 			bootstrap.Cell,
 			lookup.Cell,
@@ -92,7 +92,7 @@ func setupTestEnv(t *testing.T) *StandaloneDNSProxy {
 
 	hive.AddConfigOverride(
 		h,
-		func(cfg *fqdnconfig.Config) {
+		func(cfg *config.Config) {
 			cfg.EnableStandaloneDNSProxy = true
 			cfg.StandaloneDNSProxyServerPort = 1000
 			cfg.ToFQDNsProxyPort = 1001

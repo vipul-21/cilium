@@ -11,7 +11,7 @@ import (
 	ipsec "github.com/cilium/cilium/pkg/datapath/linux/ipsec/types"
 	loader "github.com/cilium/cilium/pkg/datapath/loader/types"
 	endpoint "github.com/cilium/cilium/pkg/endpoint/types"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	"github.com/cilium/cilium/pkg/ipcache"
@@ -48,7 +48,7 @@ type EndpointParams struct {
 	CTMapGC             ctmap.GCRunner
 	KVStoreSynchronizer *ipcache.IPIdentitySynchronizer
 	WgConfig            wgTypes.Config
-	FQDNConfig          fqdnconfig.Config
+	FQDNConfig          config.Config
 	IPSecConfig         ipsec.Config
 	LxcMap              lxcmap.Map
 	LocalNodeStore      node.NodeGetter

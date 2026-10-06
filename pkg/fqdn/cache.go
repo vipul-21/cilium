@@ -16,7 +16,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -1161,7 +1161,7 @@ func (zombies *DNSZombieMappings) GC() (alive, dead []*DNSZombieMapping) {
 			}
 		}
 		if warnActiveDNSEntries {
-			zombies.logger.Warn(fmt.Sprintf("Evicting expired DNS cache entries that may be in-use due to per-host limits. This may cause recently created connections to be disconnected. Raise %s to mitigate this.", fqdnconfig.ToFQDNsMaxIPsPerHost))
+			zombies.logger.Warn(fmt.Sprintf("Evicting expired DNS cache entries that may be in-use due to per-host limits. This may cause recently created connections to be disconnected. Raise %s to mitigate this.", config.ToFQDNsMaxIPsPerHost))
 		}
 
 		for _, dead := range dead[deadIdx:] {

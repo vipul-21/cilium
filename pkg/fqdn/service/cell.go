@@ -11,7 +11,7 @@ import (
 	"github.com/cilium/statedb"
 
 	"github.com/cilium/cilium/pkg/endpointmanager"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/option"
@@ -42,7 +42,7 @@ type serverParams struct {
 	DNSRequestHandler  messagehandler.DNSMessageHandler
 	IPCache            *ipcache.IPCache
 	JobGroup           job.Group
-	Config             fqdnconfig.Config
+	Config             config.Config
 	DaemonConfig       *option.DaemonConfig
 	DefaultListener    listenConfig
 	DB                 *statedb.DB

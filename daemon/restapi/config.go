@@ -31,7 +31,7 @@ import (
 	endpoint "github.com/cilium/cilium/pkg/endpoint/types"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/eventqueue"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/logging"
@@ -72,7 +72,7 @@ type configModifyApiHandlerParams struct {
 	legacy.DaemonInitialization
 
 	DaemonConfig    *option.DaemonConfig
-	FQDNConfig      fqdnconfig.Config
+	FQDNConfig      config.Config
 	DB              *statedb.DB
 	Devices         statedb.Table[*datapathTables.Device]
 	Clientset       k8sClient.Clientset
@@ -361,7 +361,7 @@ type getConfigHandler struct {
 	logger *slog.Logger
 
 	daemonConfig    *option.DaemonConfig
-	fqdnConfig      fqdnconfig.Config
+	fqdnConfig      config.Config
 	db              *statedb.DB
 	devices         statedb.Table[*datapathTables.Device]
 	clientset       k8sClient.Clientset

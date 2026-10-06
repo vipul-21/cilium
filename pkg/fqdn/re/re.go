@@ -12,7 +12,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 )
 
 // CompileRegex compiles a pattern p into a regex and returns the regex object.
@@ -40,7 +40,7 @@ func Resize(logger *slog.Logger, size uint) {
 		size = 16_000_000
 		logger.Warn(fmt.Sprintf(
 			"FQDN regex compilation LRU size is unlimited, which can grow unbounded potentially consuming too much memory. Consider passing a maximum size via --%s.",
-			fqdnconfig.FQDNRegexCompileLRUSize,
+			config.FQDNRegexCompileLRUSize,
 		))
 	}
 	regexCompileLRU.cache.Resize(int(size))
@@ -58,7 +58,7 @@ func newRegexCache(size uint) *RegexCompileLRU {
 
 // regexCompileLRU is the singleton instance of the LRU that's shared
 // throughout Cilium.
-var regexCompileLRU = newRegexCache(fqdnconfig.DefaultConfig.FQDNRegexCompileLRUSize)
+var regexCompileLRU = newRegexCache(config.DefaultConfig.FQDNRegexCompileLRUSize)
 
 // RegexCompileLRU is an LRU cache for storing compiled regex objects of FQDN
 // names or patterns, used in CiliumNetworkPolicy or

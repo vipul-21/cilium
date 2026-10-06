@@ -10,7 +10,7 @@ import (
 	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/require"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/metrics/metric"
 )
 
@@ -28,7 +28,7 @@ func TestDNSSemaphoreMetricConfig(t *testing.T) {
 			reg := &Registry{params: RegistryParams{
 				Logger:      hivetest.Logger(t),
 				AutoMetrics: []metric.WithMetadata{counter},
-				FQDNConfig:  fqdnconfig.Config{DNSProxyConcurrencyLimit: limit},
+				FQDNConfig:  config.Config{DNSProxyConcurrencyLimit: limit},
 			}}
 			reg.registerMetrics()
 			require.Equal(t, limit > 0, counter.IsEnabled())

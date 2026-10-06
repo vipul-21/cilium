@@ -8,7 +8,7 @@ import (
 
 	"github.com/cilium/hive/cell"
 
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/lookup"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
@@ -31,7 +31,7 @@ type dnsProxyParams struct {
 
 	Lifecycle          cell.Lifecycle
 	Logger             *slog.Logger
-	FQDNConfig         fqdnconfig.Config
+	FQDNConfig         config.Config
 	DNSRequestHandler  messagehandler.DNSMessageHandler
 	ProxyLookupHandler lookup.ProxyLookupHandler
 }

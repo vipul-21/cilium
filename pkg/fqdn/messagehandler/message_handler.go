@@ -15,7 +15,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/fqdn"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
 	"github.com/cilium/cilium/pkg/identity"
@@ -77,7 +77,7 @@ type DNSMessageHandler interface {
 
 type dnsMessageHandler struct {
 	logger            *slog.Logger
-	config            fqdnconfig.Config
+	config            config.Config
 	nameManager       namemanager.NameManager
 	proxyAccessLogger accesslog.ProxyAccessLogger
 	DNSRequestHandler DNSMessageHandler
@@ -319,7 +319,7 @@ func (h *dnsMessageHandler) UpdateOnDNSMsg(lookupTime time.Time, ep *endpoint.En
 	stat.QnameLockTime.End(true)
 
 	if d := time.Since(mutexAcquireStart); d >= h.config.DNSProxyLockTimeout {
-		h.logger.Warn(fmt.Sprintf("Name lock acquisition time took longer than expected. Potentially too many parallel DNS requests being processed, consider adjusting --%s and/or --%s", fqdnconfig.DNSProxyLockCount, fqdnconfig.DNSProxyLockTimeout),
+		h.logger.Warn(fmt.Sprintf("Name lock acquisition time took longer than expected. Potentially too many parallel DNS requests being processed, consider adjusting --%s and/or --%s", config.DNSProxyLockCount, config.DNSProxyLockTimeout),
 			logfields.DNSName, qname,
 			logfields.Duration, d,
 			logfields.Expected, h.config.DNSProxyLockTimeout,

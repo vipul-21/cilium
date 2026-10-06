@@ -23,7 +23,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/linux/linux_defaults"
 	"github.com/cilium/cilium/pkg/endpoint"
-	fqdnconfig "github.com/cilium/cilium/pkg/fqdn/config"
+	"github.com/cilium/cilium/pkg/fqdn/config"
 	"github.com/cilium/cilium/pkg/fqdn/lookup"
 	"github.com/cilium/cilium/pkg/fqdn/matchpattern"
 	"github.com/cilium/cilium/pkg/fqdn/proxy/ipfamily"
@@ -559,7 +559,7 @@ func (allow perEPAllow) getPortRulesForID(logger *slog.Logger, endpointID uint64
 
 // DNSProxyConfig is the configuration for the DNS proxy.
 type DNSProxyConfig struct {
-	fqdnconfig.Config
+	config.Config
 	Logger  *slog.Logger
 	Address string
 	IPv4    bool
@@ -598,13 +598,13 @@ func NewDNSProxy(dnsProxyConfig DNSProxyConfig, proxyLookupHandler lookup.ProxyL
 	}
 
 	switch strings.ToLower(dnsProxyConfig.FQDNRejectResponse) {
-	case strings.ToLower(fqdnconfig.FQDNProxyDenyWithNameError):
+	case strings.ToLower(config.FQDNProxyDenyWithNameError):
 		p.rejectReply = dns.RcodeNameError
-	case strings.ToLower(fqdnconfig.FQDNProxyDenyWithRefused), "":
+	case strings.ToLower(config.FQDNProxyDenyWithRefused), "":
 		p.rejectReply = dns.RcodeRefused
 	default:
 		p.logger.Info(fmt.Sprintf("DNS reject response '%s' is not valid, available options are '%v'",
-			dnsProxyConfig.FQDNRejectResponse, fqdnconfig.FQDNRejectOptions))
+			dnsProxyConfig.FQDNRejectResponse, config.FQDNRejectOptions))
 	}
 
 	return p
